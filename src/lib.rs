@@ -4,6 +4,11 @@ pub use format::*;
 mod context;
 pub use context::*;
 
+mod api;
+pub use api::*;
+
+mod queries;
+
 use std::sync::LazyLock;
 use tree_sitter::Language;
 

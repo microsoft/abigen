@@ -32,7 +32,7 @@ fn main() {
         let mut qc = QueryCursor::new();
         let node = ctx.root();
         let mut qm = node.matches(&q, &mut qc);
-        while let Some(m) = qm.next() {
+        while let Some(m) = qm.item.next() {
             let node = InContext::new(m.nodes_for_capture_index(0).next().unwrap(), &ctx);
             abigen::print_node(node, args.max_depth, args.max_code);
             println!();

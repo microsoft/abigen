@@ -94,9 +94,10 @@ impl<'t> InContext<'t, Node<'t>> {
         }
     }
 
-    pub fn matches<'q, 'c>(&self, query: &'q Query, cursor: &'c mut QueryCursor) -> QueryMatches<'q, 't, &[u8], &[u8]>
+    pub fn matches<'q, 'c>(&self, query: &'q Query, cursor: &'c mut QueryCursor)
+        -> InContext<'t, QueryMatches<'q, 't, &[u8], &[u8]>>
     where 'c: 'q {
-        cursor.matches(query, self.item, &self.context.text as &[u8])
+        InContext::new(cursor.matches(query, self.item, &self.context.text as &[u8]), self.context)
     }
 
     pub fn walk(&'t self) -> InContext<'t, TreeCursor<'t>> {
