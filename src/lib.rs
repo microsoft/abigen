@@ -1,10 +1,12 @@
-pub mod format;
-mod context;
+mod format;
+pub use format::*;
 
-use std::sync::LazyLock;
-use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator, Tree, TreeCursor};
+mod context;
 pub use context::*;
 
-static LANG: LazyLock<Language> = LazyLock::new(|| {
+use std::sync::LazyLock;
+use tree_sitter::Language;
+
+pub static LANG: LazyLock<Language> = LazyLock::new(|| {
     tree_sitter_cpp::LANGUAGE.into()
 });

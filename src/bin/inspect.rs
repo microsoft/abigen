@@ -1,6 +1,7 @@
-use std::{fs, path::PathBuf};
+use std::path::PathBuf;
 use clap::Parser;
-use abigen::{Context, format::print_node};
+use tree_sitter::{Query, QueryCursor, StreamingIterator};
+use abigen::{self, Context, InContext};
 
 #[derive(Parser)]
 struct Args {
@@ -27,12 +28,14 @@ fn main() {
     if let Some(ref qtext) = args.query {
         let q = Query::new(&abigen::LANG, qtext).expect("Failed to compile query"); 
         let mut qc = QueryCursor::new();
-        let mut qm = qc.matches(&q, root, &buf as &[u8]);
+        let node = ctx.root();
+        let mut qm = node.matches(&q, &mut qc);
         while let Some(m) = qm.next() {
-            print_node(m.nodes_for_capture_index(0).next().unwrap(), &buf, args.max_depth);
+            let node = InContext::new(m.nodes_for_capture_index(0).next().unwrap(), &ctx);
+            abigen::print_node(node, args.max_depth);
             println!();
         }
     } else {
-        print_node(root, &buf,  args.max_depth);
+        abigen::print_node(ctx.root(), args.max_depth);
     }
 }

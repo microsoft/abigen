@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path, str, fmt::Display};
 
-use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryError, QueryMatches, StreamingIterator, Tree};
+use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryMatches, Tree, TreeCursor};
 
 use crate::LANG;
 
@@ -9,7 +9,6 @@ pub enum ContextError {
     Language(LanguageError),
     Io(io::Error),
     Utf8(str::Utf8Error),
-    Query(QueryError),
 }
 impl From<LanguageError> for ContextError {
     fn from(value: LanguageError) -> Self {
@@ -26,11 +25,6 @@ impl From<str::Utf8Error> for ContextError {
         Self::Utf8(value)
     }
 }
-impl From<QueryError> for ContextError {
-    fn from(value: QueryError) -> Self {
-        Self::Query(value)
-    }
-}
 
 impl Display for ContextError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -38,7 +32,6 @@ impl Display for ContextError {
             Self::Language(e) => write!(f, "{e}"),
             Self::Io(e) => write!(f, "{e}"),
             Self::Utf8(e) => write!(f, "{e}"),
-            Self::Query(e) => write!(f, "{e}"),
         }
     }
 }
@@ -67,7 +60,7 @@ impl Context {
         })
     }
 
-    pub fn root<'a>(&'a self) -> InContext<'a, Node> {
+    pub fn root<'t>(&'t self) -> InContext<'t, Node<'t>> {
         InContext {
             context: self,
             item: self.tree.root_node(),
@@ -75,12 +68,18 @@ impl Context {
     }
 }
 
-pub struct InContext<'a, T> {
-    pub context: &'a Context,
+pub struct InContext<'t, T> {
+    pub context: &'t Context,
     pub item: T,
 }
 
-impl<'a> InContext<'a, Node<'a>> {
+impl<'t, T> InContext<'t, T> {
+    pub fn new(item: T, context: &'t Context) -> Self {
+        Self { context, item }
+    }
+}
+
+impl<'t> InContext<'t, Node<'t>> {
     pub fn text(&self) -> Result<&str, ContextError> {
         self.item.utf8_text(&self.context.text).map_err(ContextError::from)
     }
@@ -95,39 +94,18 @@ impl<'a> InContext<'a, Node<'a>> {
         }
     }
 
-    pub fn matches(self, query: &str) -> Result<QueryContext<'a>, ContextError> {
-        QueryContext::new(self, query)
+    pub fn matches<'q, 'c>(&self, query: &'q Query, cursor: &'c mut QueryCursor) -> QueryMatches<'q, 't, &[u8], &[u8]>
+    where 'c: 'q {
+        cursor.matches(query, self.item, &self.context.text as &[u8])
+    }
+
+    pub fn walk(&'t self) -> InContext<'t, TreeCursor<'t>> {
+        InContext::new(self.item.walk(), self.context)
     }
 }
 
-pub struct QueryContext<'t> {
-    pub node: InContext<'t, Node<'t>>,
-    pub query: Query,
-    pub cursor: QueryCursor,
-}
-impl<'t> QueryContext<'t> {
-    pub fn new(node: InContext<'t, Node<'t>>, query: &str) -> Result<Self, ContextError> {
-        let query = Query::new(&LANG, query)?;
-        let mut cursor = QueryCursor::new();
-        Ok(Self {
-            node, query, cursor
-        })
+impl<'t> InContext<'t, TreeCursor<'t>> {
+    pub fn node(&self) -> InContext<'t, Node<'t>> {
+        InContext::new(self.item.node(), self.context)
     }
-
-    pub fn matches<'q>(&'q self) -> InQueryContext<'q, 't, QueryMatches<'q, 't, &'t [u8], &'t [u8]>> {
-        let m = self.cursor.matches(
-            &self.query, 
-            self.node.item, 
-            &self.node.context.text as &[u8],
-        );
-        InQueryContext {
-            context: self,
-            item: m,
-        }
-    }
-}
-
-pub struct InQueryContext<'q, 't, T> {
-    pub context: &'q QueryContext<'t>,
-    pub item: T,
 }
