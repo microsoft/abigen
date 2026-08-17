@@ -25,6 +25,11 @@ impl From<str::Utf8Error> for ContextError {
         Self::Utf8(value)
     }
 }
+impl Into<std::fmt::Error> for ContextError {
+    fn into(self) -> std::fmt::Error {
+        std::fmt::Error
+    }
+}
 
 impl Display for ContextError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -80,20 +85,6 @@ impl<'t, T> InContext<'t, T> {
 }
 
 impl<'t> InContext<'t, Node<'t>> {
-    pub fn text(&self) -> Result<&str, ContextError> {
-        self.item.utf8_text(&self.context.text).map_err(ContextError::from)
-    }
-
-    pub fn text_trunc(&self, max_len: usize) -> Result<&str, ContextError> {
-        if self.item.byte_range().len() > max_len {
-            str::from_utf8(
-                &self.context.text[self.item.start_byte() .. self.item.start_byte() + max_len],
-            ).map_err(ContextError::from)
-        } else {
-            self.text()
-        }
-    }
-
     pub fn matches<'q, 'c>(&self, query: &'q Query, cursor: &'c mut QueryCursor)
         -> InContext<'t, QueryMatches<'q, 't, &[u8], &[u8]>>
     where 'c: 'q {

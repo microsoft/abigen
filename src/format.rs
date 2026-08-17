@@ -1,8 +1,22 @@
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display, str::Utf8Error, sync::LazyLock};
 use tree_sitter::{Node, TreeCursor};
 use crate::InContext;
 
 const INDENT: &str = "  ";
+static STRIP_MAP: LazyLock<HashMap<char, char>> = LazyLock::new(|| {
+    HashMap::from_iter([
+        ('\n', '␤'),
+        ('\r', '␍'),
+    ])
+});
+
+fn sanitize(item: char) -> char {
+    if let Some(clean) = STRIP_MAP.get(&item) {
+        *clean
+    } else {
+        item
+    }
+}
 
 pub fn print_node(node: InContext<Node>, max_depth: u32, max_code: usize) {
     print_tree(node.walk(), max_depth, max_code);
@@ -49,20 +63,15 @@ pub struct NodeFormat<'a> {
 
 impl Display for NodeFormat<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let node = self.node.item;
-        let body = if node.byte_range().len() > self.max_code {
-            format!("\"{}...\" +{} bytes",
-                str::from_utf8(&self.node.context.text[node.start_byte() .. node.start_byte() + self.max_code])
-                    .map_err(|_| std::fmt::Error)?
-                    .replace('\n', "\u{2424}"),
-                node.byte_range().len() - self.max_code,
+        let body: String = self.node.as_str().map_err(|_| std::fmt::Error)?
+            .chars().map(sanitize).collect();
+        let body = if body.len() > self.max_code {
+            format!("\"{}...\" +{} chars",
+                &body[0 .. self.max_code],
+                body.len() - self.max_code,
             )
         } else {
-            format!("\"{}\"",
-                self.node.text()
-                    .map_err(|_| std::fmt::Error)?
-                    .replace('\n', "\u{2424}"),
-            )
+            format!("\"{}\"", body)
         };
 
         match self.field {
@@ -73,5 +82,17 @@ impl Display for NodeFormat<'_> {
                 write!(f, "{typ} {body}", typ = self.node.item.kind())
             },
         }
+    }
+}
+
+impl<'a> InContext<'a, Node<'a>> {
+    pub fn as_str(&self) -> Result<&'a str, Utf8Error> {
+        self.item.utf8_text(&self.context.text)
+    }
+}
+
+impl<'a> Display for InContext<'a, Node<'a>> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str().map_err(|_| std::fmt::Error)?)
     }
 }

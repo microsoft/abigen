@@ -15,11 +15,11 @@ struct Args {
 
     /// The number of descendant AST node layers to print
     #[arg(short = 'd', long, default_value_t = 5)]
-    max_depth: u32,
+    depth: u32,
 
     /// The amount of AST node code to print
     #[arg(short, long, default_value_t = 50)]
-    max_code: usize,
+    code: usize,
 }
 
 fn main() {
@@ -34,10 +34,10 @@ fn main() {
         let mut qm = node.matches(&q, &mut qc);
         while let Some(m) = qm.item.next() {
             let node = InContext::new(m.nodes_for_capture_index(0).next().unwrap(), &ctx);
-            abigen::print_node(node, args.max_depth, args.max_code);
+            abigen::print_node(node, args.depth, args.code);
             println!();
         }
     } else {
-        abigen::print_node(ctx.root(), args.max_depth, args.max_code);
+        abigen::print_node(ctx.root(), args.depth, args.code);
     }
 }
