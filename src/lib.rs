@@ -7,7 +7,10 @@ pub use context::*;
 mod api;
 pub use api::*;
 
-mod queries;
+mod function;
+pub use function::*;
+
+mod query;
 
 use std::sync::LazyLock;
 use tree_sitter::Language;

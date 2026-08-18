@@ -1,6 +1,6 @@
 use std::{fs, io, path::Path, str, fmt::Display};
 
-use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryMatches, Tree, TreeCursor};
+use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryMatch, QueryMatches, StreamingIterator, Tree, TreeCursor};
 
 use crate::LANG;
 
@@ -42,6 +42,7 @@ impl Display for ContextError {
 }
 impl std::error::Error for ContextError {}
 
+#[derive(Debug, Clone)]
 pub struct Context {
     pub text: Vec<u8>,
     tree: Tree,
@@ -71,8 +72,13 @@ impl Context {
             item: self.tree.root_node(),
         }
     }
+
+    pub fn text<'t>(&'t self) -> &'t [u8] {
+        &self.text as &[u8]
+    }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct InContext<'t, T> {
     pub context: &'t Context,
     pub item: T,
@@ -85,12 +91,6 @@ impl<'t, T> InContext<'t, T> {
 }
 
 impl<'t> InContext<'t, Node<'t>> {
-    pub fn matches<'q, 'c>(&self, query: &'q Query, cursor: &'c mut QueryCursor)
-        -> InContext<'t, QueryMatches<'q, 't, &[u8], &[u8]>>
-    where 'c: 'q {
-        InContext::new(cursor.matches(query, self.item, &self.context.text as &[u8]), self.context)
-    }
-
     pub fn walk(&'t self) -> InContext<'t, TreeCursor<'t>> {
         InContext::new(self.item.walk(), self.context)
     }
