@@ -113,6 +113,14 @@ impl<'t> Into<Node<'t>> for InContext<'t, Node<'t>> {
         self.item
     }
 }
+impl<'t> PartialEq<&str> for InContext<'t, Node<'t>> {
+    fn eq(&self, other: &&str) -> bool {
+        match self.as_str() {
+            Ok(s) => s == *other,
+            Err(_) => false,
+        }
+    }
+}
 
 impl<'t> InContext<'t, TreeCursor<'t>> {
     pub fn node(&self) -> InContext<'t, Node<'t>> {

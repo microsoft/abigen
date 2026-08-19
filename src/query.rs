@@ -25,6 +25,7 @@ pub static FN_DEF_QUERY: LazyLock<FnDefQuery> = LazyLock::new(|| {
 
 pub type QueryMatches<'t, 'q> = tree_sitter::QueryMatches<'q, 't, &'t [u8], &'t [u8]>;
 
+#[derive(Debug)]
 pub struct FnDefQuery {
     pub query: Query,
     pub return_t: u32,
@@ -41,6 +42,7 @@ pub struct FnDefQueryMatches<'t, 'q> {
     current: Option<FnDefQueryMatch<'t>>,
 }
 
+#[derive(Debug, Clone)]
 pub struct FnDefQueryMatch<'t> {
     pub return_t: InContext<'t, Node<'t>>,
     pub name: InContext<'t, Node<'t>>,
@@ -89,30 +91,44 @@ where 't: 'q {
 mod test {
     use super::*;
 
-    const HEADER: &'static str = include_str!("test/dummy.hpp");
+    const HEADER: &'static str = r#"
+        namespace ns {
+            class MyClass {
+            public:
+                MyClass(int arg1);
+                ~MyClass();
+                
+                const void* pub_method(int arg1, float arg2);
+        
+            private:
+                int priv_method(char* arg1, uint8_t* arg2);
+            };
+        }
+    "#;
 
-    fn trad_query() {
-        let context = Context::try_from_buffer(HEADER).expect("Parse error");
-        let root = context.root();
-
-        let mut cursor = QueryCursor::new();
-        let mut matches = cursor.matches(&FN_DEF_QUERY.query, root.item, context.text());
-        while let Some(m) = matches.next() {
-            for node in m.nodes_for_capture_index(FN_DEF_QUERY.name) {
-                let _node = context.wrap(node);
-                // do something
-            }
+    #[derive(Debug, Clone, Copy)]
+    struct MatchLiteral {
+        return_t: &'static str,
+        name: &'static str,
+    }
+    impl PartialEq<FnDefQueryMatch<'_>> for MatchLiteral {
+        fn eq(&self, other: &FnDefQueryMatch) -> bool {
+            other.return_t == self.return_t
+                && other.name == self.name
         }
     }
 
-    fn nova_query() {
+    #[test]
+    fn query() {
         let context = Context::try_from_buffer(HEADER).expect("Parse error");
         let root = context.root();
 
         let mut cursor = context.wrap(QueryCursor::new());
         let mut matches = cursor.matches(&FN_DEF_QUERY, root);
-        while let Some(_m) = matches.next() {
-            // do something
+
+        let mut ms = vec![];
+        while let Some(m) = matches.next() {
+            ms.push(m.clone());
         }
     }
 }
