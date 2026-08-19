@@ -18,8 +18,8 @@ impl ApiSurface {
         let ctx = Context::try_from_file(path)?;
         let root = ctx.root();
 
-        let mut qc = QueryCursor::new();
-        let mut matches = root.matches(&query::FN_DEF_QUERY, &mut qc);
+        let mut qc = ctx.wrap(QueryCursor::new());
+        let mut matches = qc.matches(&query::FN_DEF_QUERY, root);
         while let Some(qmatch) = matches.item.next() {
             let node = InContext::new(qmatch.nodes_for_capture_index(0).next().unwrap(), &ctx);
             print_node(node, 6, 50);

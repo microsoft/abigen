@@ -1,14 +1,21 @@
-use std::{fs, io, path::Path, str, fmt::Display};
+use std::{fmt::Display, fs, io, path::Path, str, sync::{LazyLock, RwLock, RwLockWriteGuard, PoisonError}};
 
 use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryMatch, QueryMatches, StreamingIterator, Tree, TreeCursor};
 
 use crate::LANG;
+
+static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
+    let mut p = Parser::new();
+    p.set_language(&LANG);
+    RwLock::new(p)
+});
 
 #[derive(Debug)]
 pub enum ContextError {
     Language(LanguageError),
     Io(io::Error),
     Utf8(str::Utf8Error),
+    Poison(PoisonError<RwLockWriteGuard<'static, Parser>>),
 }
 impl From<LanguageError> for ContextError {
     fn from(value: LanguageError) -> Self {
@@ -25,6 +32,11 @@ impl From<str::Utf8Error> for ContextError {
         Self::Utf8(value)
     }
 }
+impl From<PoisonError<RwLockWriteGuard<'static, Parser>>> for ContextError {
+    fn from(value: PoisonError<RwLockWriteGuard<'static, Parser>>) -> Self {
+        Self::Poison(value)
+    }
+}
 impl Into<std::fmt::Error> for ContextError {
     fn into(self) -> std::fmt::Error {
         std::fmt::Error
@@ -37,6 +49,7 @@ impl Display for ContextError {
             Self::Language(e) => write!(f, "{e}"),
             Self::Io(e) => write!(f, "{e}"),
             Self::Utf8(e) => write!(f, "{e}"),
+            Self::Poison(e) => write!(f, "{e}"),
         }
     }
 }
@@ -55,11 +68,12 @@ impl Context {
     }
 
     pub fn try_from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, ContextError> {
-        let mut parser = Parser::new();
-        parser.set_language(&LANG)?;
-
         let buf = buf.into();
-        let tree = parser.parse(&buf, None).unwrap();
+        
+        let mut p = PARSER.write()?;
+        let tree = p.parse(&buf, None).unwrap(); // cannot fail
+        p.reset();
+
         Ok(Self {
             text: buf,
             tree,
@@ -76,6 +90,10 @@ impl Context {
     pub fn text<'t>(&'t self) -> &'t [u8] {
         &self.text as &[u8]
     }
+
+    pub fn wrap<T>(&self, item: T) -> InContext<'_, T> {
+        InContext { item, context: self }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -84,20 +102,19 @@ pub struct InContext<'t, T> {
     pub item: T,
 }
 
-impl<'t, T> InContext<'t, T> {
-    pub fn new(item: T, context: &'t Context) -> Self {
-        Self { context, item }
-    }
-}
-
 impl<'t> InContext<'t, Node<'t>> {
     pub fn walk(&'t self) -> InContext<'t, TreeCursor<'t>> {
-        InContext::new(self.item.walk(), self.context)
+        self.context.wrap(self.item.walk())
+    }
+}
+impl<'t> Into<Node<'t>> for InContext<'t, Node<'t>> {
+    fn into(self) -> Node<'t> {
+        self.item
     }
 }
 
 impl<'t> InContext<'t, TreeCursor<'t>> {
     pub fn node(&self) -> InContext<'t, Node<'t>> {
-        InContext::new(self.item.node(), self.context)
+        self.context.wrap(self.item.node())
     }
 }
