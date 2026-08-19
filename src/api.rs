@@ -2,11 +2,11 @@ use std::path::Path;
 
 use tree_sitter::{QueryCursor, StreamingIterator};
 
-use crate::{ApiFn, Context, ContextError, InContext, print_node, query};
+use crate::{ApiFn, Context, ContextError, print_node, query};
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiSurface {
-    fns: Vec<ApiFn>,
+    _fns: Vec<ApiFn>,
 }
 
 impl ApiSurface {
@@ -20,9 +20,8 @@ impl ApiSurface {
 
         let mut qc = ctx.wrap(QueryCursor::new());
         let mut matches = qc.matches(&query::FN_DEF_QUERY, root);
-        while let Some(qmatch) = matches.item.next() {
-            let node = InContext::new(qmatch.nodes_for_capture_index(0).next().unwrap(), &ctx);
-            print_node(node, 6, 50);
+        while let Some(qmatch) = matches.next() {
+            print_node(qmatch.name, 6, 50);
         }
 
         Ok(())

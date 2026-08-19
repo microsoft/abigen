@@ -2,7 +2,7 @@ use std::sync::LazyLock;
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 use crate::{Context, InContext};
 
-static FN_DEF_QUERY: LazyLock<FnDefQuery> = LazyLock::new(|| {
+pub static FN_DEF_QUERY: LazyLock<FnDefQuery> = LazyLock::new(|| {
     let query = Query::new(&crate::LANG, r#"
         ((_)
             type: (_) @ret_t

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use clap::Parser;
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
-use abigen::{self, Context, InContext};
+use abigen::{self, Context};
 
 /// Print the abstract syntax tree (AST) of a C++ header file
 #[derive(Parser)]
@@ -31,9 +31,9 @@ fn main() {
         let q = Query::new(&abigen::LANG, qtext).expect("Failed to compile query"); 
         let mut qc = QueryCursor::new();
         let node = ctx.root();
-        let mut qm = node.matches(&q, &mut qc);
-        while let Some(m) = qm.item.next() {
-            let node = InContext::new(m.nodes_for_capture_index(0).next().unwrap(), &ctx);
+        let mut qm = qc.matches(&q, node.item, ctx.text());
+        while let Some(m) = qm.next() {
+            let node = ctx.wrap(m.nodes_for_capture_index(0).next().unwrap());
             abigen::print_node(node, args.depth, args.code);
             println!();
         }

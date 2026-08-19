@@ -1,12 +1,13 @@
 use std::{fmt::Display, fs, io, path::Path, str, sync::{LazyLock, RwLock, RwLockWriteGuard, PoisonError}};
 
-use tree_sitter::{LanguageError, Node, Parser, Query, QueryCursor, QueryMatch, QueryMatches, StreamingIterator, Tree, TreeCursor};
+use tree_sitter::{LanguageError, Node, Parser, Tree, TreeCursor};
+
 
 use crate::LANG;
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
-    p.set_language(&LANG);
+    p.set_language(&LANG).expect("Failed to set parser language");
     RwLock::new(p)
 });
 
