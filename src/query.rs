@@ -16,7 +16,7 @@ pub trait StructuredQuery {
 pub trait StructuredQueryMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
     type Field : AsRef<str> + ?Sized;
 
-    fn field_value(&self, field_id: u32) -> &Self::Field;
+    fn field_value(&self, field_id: u32) -> Option<&Self::Field>;
 }
 
 impl<'t> InContext<'t, QueryCursor> {
