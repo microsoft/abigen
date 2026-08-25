@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, str::Utf8Error, sync::LazyLock};
+use std::{collections::HashMap, fmt::{Debug, Display}, str::Utf8Error, sync::LazyLock};
 use tree_sitter::{Node, TreeCursor};
 use crate::InContext;
 
@@ -91,14 +91,14 @@ impl<'a> InContext<'a, Node<'a>> {
     }
 }
 
-impl<'a> Display for InContext<'a, Node<'a>> {
+impl<'a> Debug for InContext<'a, Node<'a>> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str().map_err(|_| std::fmt::Error)?)
+        write!(f, "\"{}\"", self.as_str().map_err(|_| std::fmt::Error)?)
     }
 }
 
 impl<'a> AsRef<str> for InContext<'a, Node<'a>> {
     fn as_ref(&self) -> &str {
-        self.as_str().expect("Utf8 error")
+        self.as_str().expect("Bad utf8")
     }
 }

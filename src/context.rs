@@ -102,7 +102,7 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone, Copy, std::hash::Hash)]
+#[derive(Clone, Copy, std::hash::Hash)]
 pub struct InContext<'t, T> {
     pub context: &'t Context,
     pub item: T,

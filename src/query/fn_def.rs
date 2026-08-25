@@ -1,10 +1,10 @@
-use std::{fmt::Display, sync::LazyLock};
+use std::{fmt::Debug, sync::LazyLock};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
 use crate::{InContext, query::{StructuredQuery, StructuredQueryMatch}};
 
 pub static FN_DEF_QUERY: LazyLock<FnDefQuery> = LazyLock::new(|| {
     let query = Query::new(&crate::LANG, r#"
-        ((_)
+        (_
             type: (_) @return_t
             declarator: (identifier) @name
         ) @decl
@@ -73,30 +73,22 @@ impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredQueryMatch<FnDef
 impl<'t> StructuredQueryMatch<FnDefQuery> for FnDefQueryMatch<'t> {
     type Field = InContext<'t, Node<'t>>;
 
-    fn field_value(&self, field_id: u32) -> Self::Field {
+    fn field_value(&self, field_id: u32) -> &Self::Field {
         if field_id == FN_DEF_QUERY.return_t {
-            self.return_t
+            &self.return_t
         } else if field_id == FN_DEF_QUERY.name {
-            self.name
+            &self.name
         } else {
             panic!("Requesting non-existent field!")
         }
     }
 }
 
-impl Display for FnDefQueryMatch<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { return_t, name } = self;
-        write!(f, "{return_t} {name}()")
-    }
-}
-
-
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, hash::{Hash, RandomState}};
+    use std::{collections::HashSet, fmt::Debug, hash::{Hash, RandomState}};
     use tree_sitter::QueryCursor;
-    use crate::{Context, query::{StructuredQueryMatch, FN_DEF_QUERY, FnDefQuery}};
+    use crate::{Context, query::{FN_DEF_QUERY, FnDefQuery, StructuredQuery, StructuredQueryMatch}};
 
     #[derive(Debug, Clone, Copy, Eq, Hash)]
     struct MatchLiteral {
@@ -110,8 +102,8 @@ mod test {
         }
     }
     impl StructuredQueryMatch<FnDefQuery> for MatchLiteral {
-        type Field = &'static str;
-        fn field_value(&self, field_id: u32) -> Self::Field {
+        type Field = str;
+        fn field_value(&self, field_id: u32) -> &Self::Field {
             if field_id == FN_DEF_QUERY.return_t {
                 self.return_t
             } else if field_id == FN_DEF_QUERY.name {
@@ -122,10 +114,30 @@ mod test {
         }
     }
 
+    fn collection_eq<Q, Ia, Ta, Ie, Te>(actual: Ia, expected: Ie)
+    where Q: StructuredQuery,
+        Ta: StructuredQueryMatch<Q> + Debug,
+        Te: StructuredQueryMatch<Q> + PartialEq<Ta> + Hash + Eq + Debug,
+        Ia: IntoIterator<Item = Ta>,
+        Ie: IntoIterator<Item = Te> {
+        let mut expected: HashSet<Te> = expected.into_iter().collect();
+
+        let mut unexpected = vec![];
+        for item in actual {
+            let expected = expected.extract_if(|i| i == &item).next();
+            if expected.is_none() {
+                unexpected.push(item);
+            }
+        }
+        let unmatched: Vec<_> = expected.into_iter().collect();
+
+        assert_eq!(unmatched, unexpected);
+    }
+
     #[test]
     fn simple() {
         let header = "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
-        let mut expected: HashSet<_, RandomState> = HashSet::from_iter([
+        let expected: HashSet<_, RandomState> = HashSet::from_iter([
             MatchLiteral {
                 return_t: "const Session&",
                 name: "my_method",
@@ -134,14 +146,8 @@ mod test {
 
         let ctx = Context::try_from_buffer(header).expect("Parse error");
         let root = ctx.root();
-
         let mut cursor = ctx.wrap(QueryCursor::new());
-        for actual in cursor.matches(&FN_DEF_QUERY, root) {
-            let expected = expected.extract_if(|e| e == &actual).next();
-            assert!(expected.is_some(), "Unexpected match: {actual}");
-        }
-
-        assert!(expected.len() == 0, "Missing matches: {expected:?}");
+        collection_eq(cursor.matches(&FN_DEF_QUERY, root), expected);
     }
 
     // #[test]
