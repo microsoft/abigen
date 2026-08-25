@@ -96,3 +96,9 @@ impl<'a> Display for InContext<'a, Node<'a>> {
         write!(f, "{}", self.as_str().map_err(|_| std::fmt::Error)?)
     }
 }
+
+impl<'a> AsRef<str> for InContext<'a, Node<'a>> {
+    fn as_ref(&self) -> &str {
+        self.as_str().expect("Utf8 error")
+    }
+}

@@ -61,6 +61,11 @@ pub struct Context {
     pub text: Vec<u8>,
     tree: Tree,
 }
+impl std::hash::Hash for Context {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+    }
+}
 
 impl Context {
     pub fn try_from_file(path: &Path) -> Result<Self, ContextError> {
@@ -97,7 +102,7 @@ impl Context {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, std::hash::Hash)]
 pub struct InContext<'t, T> {
     pub context: &'t Context,
     pub item: T,
@@ -111,14 +116,6 @@ impl<'t> InContext<'t, Node<'t>> {
 impl<'t> Into<Node<'t>> for InContext<'t, Node<'t>> {
     fn into(self) -> Node<'t> {
         self.item
-    }
-}
-impl<'t> PartialEq<&str> for InContext<'t, Node<'t>> {
-    fn eq(&self, other: &&str) -> bool {
-        match self.as_str() {
-            Ok(s) => s == *other,
-            Err(_) => false,
-        }
     }
 }
 
