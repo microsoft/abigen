@@ -51,8 +51,8 @@ pub struct FnDefQuery {
 }
 
 impl StructuredQuery for FnDefQuery {
-    type Match<'t> = FnDefQueryMatch<'t>;
-    type Matches<'t> = std::vec::IntoIter<FnDefQueryMatch<'t>>;
+    type Match<'t> = FnDefMatch<'t>;
+    type Matches<'t> = std::vec::IntoIter<FnDefMatch<'t>>;
 
     fn eval<'c, 't, 'q>(&'q self, item: &'c mut InContext<'t, QueryCursor>, node: impl Into<Node<'t>>)
         -> Self::Matches<'t>
@@ -61,7 +61,7 @@ impl StructuredQuery for FnDefQuery {
         let mut ret = vec![];
         let mut matches = item.item.matches(&self.query, node.into(), item.context.text());
         while let Some(m) = matches.next() {
-            ret.push(FnDefQueryMatch::Method {
+            ret.push(FnDefMatch::Method {
                 root: item.context.wrap(
                     m.nodes_for_capture_index(self.root).next().unwrap()
                 ),
@@ -82,8 +82,7 @@ impl StructuredQuery for FnDefQuery {
 }
 
 #[derive(Debug, Clone)]
-pub enum FnDefQueryMatch<'t> {
-    Constructor { },
+pub enum FnDefMatch<'t> {
     Method {
         return_q: Option<InContext<'t, Node<'t>>>,
         return_t: InContext<'t, Node<'t>>,
@@ -93,7 +92,7 @@ pub enum FnDefQueryMatch<'t> {
     },
 }
 
-impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredMatch<FnDefQuery> {
+impl<T> PartialEq<T> for FnDefMatch<'_> where T: StructuredMatch<FnDefQuery> {
     fn eq(&self, other: &T) -> bool {
         match self {
             Self::Method {
@@ -114,7 +113,7 @@ impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredMatch<FnDefQuery
     }
 }
 
-impl<'t> StructuredMatch<FnDefQuery> for FnDefQueryMatch<'t> {
+impl<'t> StructuredMatch<FnDefQuery> for FnDefMatch<'t> {
     type Field = InContext<'t, Node<'t>>;
 
     fn field_value(&self, field_id: u32) -> Option<&Self::Field> {
@@ -147,7 +146,6 @@ mod test {
 
     #[derive(Debug, Clone, Copy, Eq, Hash)]
     enum MatchLiteral {
-        Constructor {},
         Method {
             return_q: Option<&'static str>,
             return_t: &'static str,
