@@ -1,10 +1,10 @@
-use std::sync::LazyLock;
-use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
-use crate::{Context, InContext};
+use tree_sitter::{Node, QueryCursor};
+use crate::InContext;
 
-pub mod fn_def;
+mod fn_def;
+pub use fn_def::*;
 
-trait StructuredQuery {
+pub trait StructuredQuery {
     type Match<'t> : StructuredQueryMatch<Self>;
     type Matches<'t> : ExactSizeIterator<Item = Self::Match<'t>>;
 
@@ -13,7 +13,7 @@ trait StructuredQuery {
         where 't: 'q, 'c: 'q;
 }
 
-trait StructuredQueryMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
+pub trait StructuredQueryMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
     type Field : AsRef<str>;
 
     fn field_value(&self, field_id: u32) -> Self::Field;
@@ -22,7 +22,7 @@ trait StructuredQueryMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
 impl<'t> InContext<'t, QueryCursor> {
     pub fn matches<'c, 'q, Q>(
         &'c mut self, 
-        query: &'q Q, 
+        query: &'q impl std::ops::Deref<Target = Q>, 
         node: impl Into<Node<'t>>,
     ) -> Q::Matches<'t>
     where 't: 'q, 'c: 'q, Q: StructuredQuery {

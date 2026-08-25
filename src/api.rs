@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use tree_sitter::{QueryCursor, StreamingIterator};
+use tree_sitter::QueryCursor;
 
 use crate::{ApiFn, Context, ContextError, print_node, query};
 
@@ -19,8 +19,7 @@ impl ApiSurface {
         let root = ctx.root();
 
         let mut qc = ctx.wrap(QueryCursor::new());
-        let mut matches = qc.matches(&query::FN_DEF_QUERY, root);
-        while let Some(qmatch) = matches.next() {
+        for qmatch in qc.matches(&query::FN_DEF_QUERY, root) {
             print_node(qmatch.name, 6, 50);
         }
 
