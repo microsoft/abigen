@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::LazyLock};
 use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
-use crate::{InContext, query::{StructuredQuery, StructuredQueryMatch}};
+use crate::{InContext, query::{StructuredQuery, StructuredMatch}};
 
 pub static FN_DEF_QUERY: LazyLock<FnDefQuery> = LazyLock::new(|| {
     let query = Query::new(&crate::LANG, r#"
@@ -93,7 +93,7 @@ pub enum FnDefQueryMatch<'t> {
     },
 }
 
-impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredQueryMatch<FnDefQuery> {
+impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredMatch<FnDefQuery> {
     fn eq(&self, other: &T) -> bool {
         match self {
             Self::Method {
@@ -114,7 +114,7 @@ impl<T> PartialEq<T> for FnDefQueryMatch<'_> where T: StructuredQueryMatch<FnDef
     }
 }
 
-impl<'t> StructuredQueryMatch<FnDefQuery> for FnDefQueryMatch<'t> {
+impl<'t> StructuredMatch<FnDefQuery> for FnDefQueryMatch<'t> {
     type Field = InContext<'t, Node<'t>>;
 
     fn field_value(&self, field_id: u32) -> Option<&Self::Field> {
@@ -143,7 +143,7 @@ impl<'t> StructuredQueryMatch<FnDefQuery> for FnDefQueryMatch<'t> {
 mod test {
     use std::{collections::HashSet, fmt::Debug, hash::{Hash, RandomState}};
     use tree_sitter::QueryCursor;
-    use crate::{Context, print_node, query::{FN_DEF_QUERY, FnDefQuery, StructuredQuery, StructuredQueryMatch}};
+    use crate::{Context, print_node, query::{FN_DEF_QUERY, FnDefQuery, StructuredQuery, StructuredMatch}};
 
     #[derive(Debug, Clone, Copy, Eq, Hash)]
     enum MatchLiteral {
@@ -156,7 +156,7 @@ mod test {
             root: &'static str,
         },
     }
-    impl<T> PartialEq<T> for MatchLiteral where T: StructuredQueryMatch<FnDefQuery> {
+    impl<T> PartialEq<T> for MatchLiteral where T: StructuredMatch<FnDefQuery> {
         fn eq(&self, other: &T) -> bool {
             match self {
                 Self::Method {
@@ -176,7 +176,7 @@ mod test {
             }
         }
     }
-    impl StructuredQueryMatch<FnDefQuery> for MatchLiteral {
+    impl StructuredMatch<FnDefQuery> for MatchLiteral {
         type Field = str;
         fn field_value(&self, field_id: u32) -> Option<&Self::Field> {
             match self {
@@ -202,8 +202,8 @@ mod test {
 
     fn collection_eq<Q, Ia, Ta, Ie, Te>(actual: Ia, expected: Ie)
     where Q: StructuredQuery,
-        Ta: StructuredQueryMatch<Q> + Debug,
-        Te: StructuredQueryMatch<Q> + PartialEq<Ta> + Hash + Eq + Debug,
+        Ta: StructuredMatch<Q> + Debug,
+        Te: StructuredMatch<Q> + PartialEq<Ta> + Hash + Eq + Debug,
         Ia: IntoIterator<Item = Ta>,
         Ie: IntoIterator<Item = Te> {
         let mut expected: HashSet<Te> = expected.into_iter().collect();

@@ -5,7 +5,7 @@ mod fn_def;
 pub use fn_def::*;
 
 pub trait StructuredQuery {
-    type Match<'t> : StructuredQueryMatch<Self>;
+    type Match<'t> : StructuredMatch<Self>;
     type Matches<'t> : ExactSizeIterator<Item = Self::Match<'t>>;
 
     fn eval<'c, 't, 'q>(&'q self, item: &'c mut InContext<'t, QueryCursor>, node: impl Into<Node<'t>>)
@@ -13,7 +13,7 @@ pub trait StructuredQuery {
         where 't: 'q, 'c: 'q;
 }
 
-pub trait StructuredQueryMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
+pub trait StructuredMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
     type Field : AsRef<str> + ?Sized;
 
     fn field_value(&self, field_id: u32) -> Option<&Self::Field>;
