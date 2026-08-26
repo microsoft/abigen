@@ -18,12 +18,12 @@ fn sanitize(item: char) -> char {
     }
 }
 
-pub fn print_node(node: InContext<Node>, max_depth: u32, max_code: usize) {
-    print_tree(node.walk(), max_depth, max_code);
+pub fn print_node(node: InContext<Node>, max_depth: u32, max_code: usize, show_anon: bool) {
+    print_tree(node.walk(), max_depth, max_code, show_anon);
 }
 
-pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32, max_code: usize) -> InContext<'a, TreeCursor<'a>> {
-    if !cursor.item.node().is_named() {
+pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32, max_code: usize, show_anon: bool) -> InContext<'a, TreeCursor<'a>> {
+    if !show_anon && !cursor.item.node().is_named() {
         return cursor;
     }
 
@@ -45,9 +45,9 @@ pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32,
         }
         println!("+{} children", cursor.node().item.named_child_count());
     } else if cursor.item.goto_first_child() {
-        cursor = print_tree(cursor, max_depth, max_code);
+        cursor = print_tree(cursor, max_depth, max_code, show_anon);
         while cursor.item.goto_next_sibling() {
-            cursor = print_tree(cursor, max_depth, max_code);
+            cursor = print_tree(cursor, max_depth, max_code, show_anon);
         }
         cursor.item.goto_parent();
     }
@@ -75,11 +75,17 @@ impl Display for NodeFormat<'_> {
         };
 
         match self.field {
-            Some(field) => {
+            Some(field) if self.node.item.is_named() => {
                 write!(f, "({field}) {typ} {body}", typ = self.node.item.kind())
             },
-            None => {
+            Some(field) => {
+                write!(f, "({field}) -{typ} {body}", typ = self.node.item.kind())
+            },
+            None if self.node.item.is_named() => {
                 write!(f, "{typ} {body}", typ = self.node.item.kind())
+            },
+            None => {
+                write!(f, "-{typ} {body}", typ = self.node.item.kind())
             },
         }
     }
@@ -87,7 +93,7 @@ impl Display for NodeFormat<'_> {
 
 impl<'a> InContext<'a, Node<'a>> {
     pub fn as_str(&self) -> Result<&'a str, Utf8Error> {
-        self.item.utf8_text(&self.context.text)
+        self.item.utf8_text(self.context.text())
     }
 }
 

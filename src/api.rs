@@ -1,10 +1,10 @@
 use std::path::Path;
 
-use crate::{ApiFn, ContextError};
+use crate::{ContextError};
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiSurface {
-    _fns: Vec<ApiFn>,
+    _headers: Vec<ApiHeader>,
 }
 
 impl ApiSurface {
@@ -17,3 +17,7 @@ impl ApiSurface {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ApiHeader {
+
+}

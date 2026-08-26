@@ -20,11 +20,15 @@ struct Args {
     /// The amount of AST node code to print
     #[arg(short, long, default_value_t = 50)]
     code: usize,
+
+    /// Show anonymous nodes
+    #[arg(long)]
+    anon: bool,
 }
 
 fn main() {
     let args = Args::parse();
-    let ctx = Context::try_from_file(&args.header)
+    let ctx = Context::from_file(&args.header)
         .expect("Failed to load file");
 
     if let Some(ref qtext) = args.query {
@@ -34,10 +38,10 @@ fn main() {
         let mut qm = qc.matches(&q, node.item, ctx.text());
         while let Some(m) = qm.next() {
             let node = ctx.wrap(m.nodes_for_capture_index(0).next().unwrap());
-            abigen::print_node(node, args.depth, args.code);
+            abigen::print_node(node, args.depth, args.code, args.anon);
             println!();
         }
     } else {
-        abigen::print_node(ctx.root(), args.depth, args.code);
+        abigen::print_node(ctx.root(), args.depth, args.code, args.anon);
     }
 }

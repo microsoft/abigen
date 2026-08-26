@@ -1,4 +1,4 @@
-use std::{fmt::Display, fs, io, path::Path, str, sync::{LazyLock, RwLock, RwLockWriteGuard, PoisonError}};
+use std::{fmt::Display, fs, io, marker::PhantomPinned, path::Path, str, sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard}};
 
 use tree_sitter::{LanguageError, Node, Parser, Tree, TreeCursor};
 
@@ -58,9 +58,10 @@ impl std::error::Error for ContextError {}
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub text: Vec<u8>,
+    text: Vec<u8>,
     tree: Tree,
 }
+
 impl std::hash::Hash for Context {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.text.hash(state);
@@ -68,12 +69,12 @@ impl std::hash::Hash for Context {
 }
 
 impl Context {
-    pub fn try_from_file(path: &Path) -> Result<Self, ContextError> {
+    pub fn from_file(path: &Path) -> Result<Self, ContextError> {
         let buf = fs::read(path)?;
-        Self::try_from_buffer(buf)
+        Self::from_buffer(buf)
     }
 
-    pub fn try_from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, ContextError> {
+    pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, ContextError> {
         let buf = buf.into();
         
         let mut p = PARSER.write()?;

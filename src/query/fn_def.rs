@@ -142,7 +142,7 @@ impl<'t> StructuredMatch<FnDefQuery> for FnDefMatch<'t> {
 mod test {
     use std::{collections::HashSet, fmt::Debug, hash::{Hash, RandomState}};
     use tree_sitter::QueryCursor;
-    use crate::{Context, print_node, query::{FN_DEF_QUERY, FnDefQuery, StructuredQuery, StructuredMatch}};
+    use crate::{Context, print_node, query::fn_def::{FN_DEF_QUERY, FnDefQuery, StructuredQuery, StructuredMatch}};
 
     #[derive(Debug, Clone, Copy, Eq, Hash)]
     enum MatchLiteral {
@@ -238,9 +238,9 @@ mod test {
             },
         ]);
 
-        let ctx = Context::try_from_buffer(header).expect("Parse error");
+        let ctx = Context::from_buffer(header).expect("Parse error");
         let root = ctx.root();
-        print_node(root, 10, 50);
+        print_node(root, 10, 50, true);
 
         let mut cursor = ctx.wrap(QueryCursor::new());
         collection_eq(cursor.matches(&FN_DEF_QUERY, root), expected);

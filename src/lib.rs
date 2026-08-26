@@ -7,9 +7,6 @@ pub use context::*;
 mod api;
 pub use api::*;
 
-mod function;
-pub use function::*;
-
 mod query;
 
 use std::sync::LazyLock;
