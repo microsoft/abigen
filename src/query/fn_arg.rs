@@ -1,4 +1,4 @@
-use super::{structured_query};
+use super::structured_query;
 
 structured_query!(
     pub FN_ARG_QUERY / FnArgQuery / FnArgMatch / FnArgMatchTest {
@@ -28,7 +28,8 @@ mod test {
 
     #[test]
     fn test() {
-        let code = "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
+        let code =
+            "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
         let expected = [
             FnArgMatchTest {
                 arg_q: None,

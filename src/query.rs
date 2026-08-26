@@ -1,8 +1,8 @@
 use std::fmt::Display;
 use tree_sitter::QueryError;
 
-mod fn_def;
 mod fn_arg;
+mod fn_def;
 
 #[derive(Debug)]
 pub enum StructuredQueryError {
@@ -141,10 +141,15 @@ pub(crate) use structured_query;
 #[cfg(test)]
 pub mod test {
     use crate::Context;
-    use std::{fmt::Debug, collections::HashSet, hash::Hash};
+    use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
-    pub fn collection_eq<A, E>(actual: impl Iterator<Item = A>, expected: impl IntoIterator<Item = E>)
-    where A: Debug, E: Debug + PartialEq + Eq + Hash + PartialEq<A> {
+    pub fn collection_eq<A, E>(
+        actual: impl Iterator<Item = A>,
+        expected: impl IntoIterator<Item = E>,
+    ) where
+        A: Debug,
+        E: Debug + PartialEq + Eq + Hash + PartialEq<A>,
+    {
         let mut expected: HashSet<_> = expected.into_iter().collect();
 
         let mut unexpected = vec![];

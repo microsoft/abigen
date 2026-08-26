@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use abigen::ApiSurface;
 use clap::Parser;
-use abigen::{ApiSurface};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Args {

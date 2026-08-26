@@ -1,13 +1,19 @@
-use std::{fmt::Display, fs, io, path::Path, str, sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard}};
+use std::{
+    fmt::Display,
+    fs, io,
+    path::Path,
+    str,
+    sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard},
+};
 
 use tree_sitter::{LanguageError, Node, Parser, Tree, TreeCursor};
-
 
 use crate::LANG;
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
-    p.set_language(&LANG).expect("Failed to set parser language");
+    p.set_language(&LANG)
+        .expect("Failed to set parser language");
     RwLock::new(p)
 });
 
@@ -76,15 +82,12 @@ impl Context {
 
     pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, ContextError> {
         let buf = buf.into();
-        
+
         let mut p = PARSER.write()?;
         let tree = p.parse(&buf, None).unwrap(); // cannot fail
         p.reset();
 
-        Ok(Self {
-            text: buf,
-            tree,
-        })
+        Ok(Self { text: buf, tree })
     }
 
     pub fn root<'t>(&'t self) -> InContext<'t, Node<'t>> {
@@ -99,7 +102,10 @@ impl Context {
     }
 
     pub fn wrap<T>(&self, item: T) -> InContext<'_, T> {
-        InContext { item, context: self }
+        InContext {
+            item,
+            context: self,
+        }
     }
 }
 

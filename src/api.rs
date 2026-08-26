@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{ContextError};
+use crate::ContextError;
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiSurface {
@@ -18,6 +18,4 @@ impl ApiSurface {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ApiHeader {
-
-}
+pub struct ApiHeader {}

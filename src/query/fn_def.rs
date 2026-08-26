@@ -46,16 +46,14 @@ mod test {
                 void internal_method();
             };
         "#;
-        let expected = [
-            FnDefMatchTest {
-                return_q: Some("const"),
-                return_t: "Session",
-                return_r: Some("&"),
-                name: "my_method",
-                args: "(int simple_arg, const std::unique_ptr<Class>& complex_arg)",
-                root: "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);",
-            },
-        ];
+        let expected = [FnDefMatchTest {
+            return_q: Some("const"),
+            return_t: "Session",
+            return_r: Some("&"),
+            name: "my_method",
+            args: "(int simple_arg, const std::unique_ptr<Class>& complex_arg)",
+            root: "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);",
+        }];
 
         let ctx = Context::from_buffer(header).expect("Parse error");
         let root = ctx.root();

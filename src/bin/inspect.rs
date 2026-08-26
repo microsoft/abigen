@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use clap::Parser;
-use tree_sitter::{Query, QueryCursor, StreamingIterator};
 use abigen::{self, Context};
+use clap::Parser;
+use std::path::PathBuf;
+use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 /// Print the abstract syntax tree (AST) of a C++ header file
 #[derive(Parser)]
@@ -28,11 +28,10 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let ctx = Context::from_file(&args.header)
-        .expect("Failed to load file");
+    let ctx = Context::from_file(&args.header).expect("Failed to load file");
 
     if let Some(ref qtext) = args.query {
-        let q = Query::new(&abigen::LANG, qtext).expect("Failed to compile query"); 
+        let q = Query::new(&abigen::LANG, qtext).expect("Failed to compile query");
         let mut qc = QueryCursor::new();
         let node = ctx.root();
         let mut qm = qc.matches(&q, node.item, ctx.text());

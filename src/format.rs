@@ -1,14 +1,15 @@
-use std::{collections::HashMap, fmt::{Debug, Display}, str::Utf8Error, sync::LazyLock};
-use tree_sitter::{Node, TreeCursor};
 use crate::InContext;
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    str::Utf8Error,
+    sync::LazyLock,
+};
+use tree_sitter::{Node, TreeCursor};
 
 const INDENT: &str = "  ";
-static STRIP_MAP: LazyLock<HashMap<char, char>> = LazyLock::new(|| {
-    HashMap::from_iter([
-        ('\n', '␤'),
-        ('\r', '␍'),
-    ])
-});
+static STRIP_MAP: LazyLock<HashMap<char, char>> =
+    LazyLock::new(|| HashMap::from_iter([('\n', '␤'), ('\r', '␍')]));
 
 fn sanitize(item: char) -> char {
     if let Some(clean) = STRIP_MAP.get(&item) {
@@ -22,7 +23,12 @@ pub fn print_node(node: InContext<Node>, max_depth: u32, max_code: usize, show_a
     print_tree(node.walk(), max_depth, max_code, show_anon);
 }
 
-pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32, max_code: usize, show_anon: bool) -> InContext<'a, TreeCursor<'a>> {
+pub fn print_tree<'a>(
+    mut cursor: InContext<'a, TreeCursor<'a>>,
+    max_depth: u32,
+    max_code: usize,
+    show_anon: bool,
+) -> InContext<'a, TreeCursor<'a>> {
     if !show_anon && !cursor.item.node().is_named() {
         return cursor;
     }
@@ -31,7 +37,8 @@ pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32,
         print!("{INDENT}");
     }
 
-    println!("{}",
+    println!(
+        "{}",
         NodeFormat {
             node: cursor.node(),
             field: cursor.item.field_name(),
@@ -40,7 +47,7 @@ pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32,
     );
 
     if cursor.item.depth() == max_depth - 1 && cursor.node().item.named_child_count() > 0 {
-        for _ in 0 .. max_depth {
+        for _ in 0..max_depth {
             print!("{INDENT}");
         }
         println!("+{} children", cursor.node().item.named_child_count());
@@ -56,18 +63,24 @@ pub fn print_tree<'a>(mut cursor: InContext<'a, TreeCursor<'a>>, max_depth: u32,
 }
 
 pub struct NodeFormat<'a> {
-    pub node: InContext<'a, Node<'a>>, 
+    pub node: InContext<'a, Node<'a>>,
     pub field: Option<&'static str>,
     pub max_code: usize,
 }
 
 impl Display for NodeFormat<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let body: String = self.node.as_str().map_err(|_| std::fmt::Error)?
-            .chars().map(sanitize).collect();
+        let body: String = self
+            .node
+            .as_str()
+            .map_err(|_| std::fmt::Error)?
+            .chars()
+            .map(sanitize)
+            .collect();
         let body = if body.len() > self.max_code {
-            format!("\"{}...\" +{} chars",
-                &body[0 .. self.max_code],
+            format!(
+                "\"{}...\" +{} chars",
+                &body[0..self.max_code],
                 body.len() - self.max_code,
             )
         } else {
@@ -77,16 +90,16 @@ impl Display for NodeFormat<'_> {
         match self.field {
             Some(field) if self.node.item.is_named() => {
                 write!(f, "({field}) {typ} {body}", typ = self.node.item.kind())
-            },
+            }
             Some(field) => {
                 write!(f, "({field}) -{typ} {body}", typ = self.node.item.kind())
-            },
+            }
             None if self.node.item.is_named() => {
                 write!(f, "{typ} {body}", typ = self.node.item.kind())
-            },
+            }
             None => {
                 write!(f, "-{typ} {body}", typ = self.node.item.kind())
-            },
+            }
         }
     }
 }
