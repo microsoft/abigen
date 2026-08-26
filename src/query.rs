@@ -1,34 +1,7 @@
 use std::fmt::Display;
-use tree_sitter::{Node, QueryCursor, QueryError};
-use crate::InContext;
+use tree_sitter::QueryError;
 
 mod fn_def;
-
-pub trait StructuredQuery {
-    type Match<'t> : StructuredMatch<Self>;
-    type Matches<'t> : ExactSizeIterator<Item = Self::Match<'t>>;
-
-    fn eval<'c, 't, 'q>(&'q self, item: &'c mut InContext<'t, QueryCursor>, node: impl Into<Node<'t>>)
-        -> Self::Matches<'t>
-        where 't: 'q, 'c: 'q;
-}
-
-pub trait StructuredMatch<Q> : PartialEq where Q : StructuredQuery + ?Sized {
-    type Field : AsRef<str> + ?Sized;
-
-    fn field_value(&self, field_id: u32) -> Option<&Self::Field>;
-}
-
-impl<'t> InContext<'t, QueryCursor> {
-    pub fn matches<'c, 'q, Q>(
-        &'c mut self, 
-        query: &'q impl std::ops::Deref<Target = Q>, 
-        node: impl Into<Node<'t>>,
-    ) -> Q::Matches<'t>
-    where 't: 'q, 'c: 'q, Q: StructuredQuery {
-        query.eval(self, node)
-    }
-}
 
 #[derive(Debug)]
 pub enum StructuredQueryError {
@@ -53,7 +26,7 @@ impl std::error::Error for StructuredQueryError {}
 
 macro_rules! structured_query (
     (
-        $vis:vis $query_name:ident / $match_name:ident {
+        $vis:vis $static_name:ident / $query_name:ident / $match_name:ident {
             $( $field:ident: $field_t:tt ),+ $(,)?
         }
         ,
@@ -76,7 +49,7 @@ macro_rules! structured_query (
                 })
             }
 
-            pub fn matches<'tree>(&self, node: $crate::InContext<'tree, Node<'tree>>) -> impl IntoIterator<Item = $match_name<'tree>> {
+            pub fn matches<'tree>(&self, node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>) -> impl ExactSizeIterator<Item = $match_name<'tree>> {
                 use ::tree_sitter::StreamingIterator;
                 let mut cursor = ::tree_sitter::QueryCursor::new();
                 let mut matches = cursor.matches(&self.query, node.item, node.context.text());
@@ -86,14 +59,20 @@ macro_rules! structured_query (
                     ret.push($match_name::from_match(self, node.context, m))
                 }
 
-                ret
+                ret.into_iter()
             }
         }
 
         macro_rules! field_t (
-            (_) => { InContext<'tree, Node<'tree>> };
-            (Option) => { Option<InContext<'tree, Node<'tree>>> };
-            (Vec) => { Vec<InContext<'tree, Node<'tree>>> };
+            (_) => {
+                $crate::InContext<'tree, ::tree_sitter::Node<'tree>>
+            };
+            (Option) => {
+                Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
+            };
+            (Vec) => {
+                Vec<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
+            };
         );
 
         macro_rules! field_val (
@@ -108,6 +87,7 @@ macro_rules! structured_query (
             };
         );
 
+        #[derive(Debug, Clone)]
         $vis struct $match_name <'tree> {
             $( $field : field_t!($field_t) ),+
         }
@@ -119,14 +99,19 @@ macro_rules! structured_query (
                 }
             }
         }
+
+        $vis static $static_name: std::sync::LazyLock<$query_name> = std::sync::LazyLock::new(|| {
+            $query_name::compile().expect(concat!("Failed to compile query", stringify!($query_name)))
+        });
     };
 );
+pub(crate) use structured_query;
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::Context;
 
-    structured_query!(pub FnDefQuery / FnDefMatch {
+    structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch {
         first: _,
         second: Option,
         third: Vec,
@@ -143,6 +128,8 @@ mod test {
 
     #[test]
     fn macro_test() {
-        let query = FnDefQuery::compile().expect("Failed query validation");
+        let ctx = Context::from_buffer(CODE).expect("Failed to parse code snippet");
+        let root = ctx.root();
+        let query = FN_DEF_QUERY.matches(root);
     }
 }
