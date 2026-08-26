@@ -1,4 +1,4 @@
-use std::{fmt::Display, fs, io, marker::PhantomPinned, path::Path, str, sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard}};
+use std::{fmt::Display, fs, io, path::Path, str, sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard}};
 
 use tree_sitter::{LanguageError, Node, Parser, Tree, TreeCursor};
 

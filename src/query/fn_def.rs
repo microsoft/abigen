@@ -1,10 +1,11 @@
 use crate::query::structured_query;
 
-structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch {
+structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch / FnDefMatchTest {
     return_q: Option,
     return_t: _,
     return_r: Option,
     name: _,
+    args: _,
     root: _,
 }, r#"
     (field_declaration_list
@@ -18,10 +19,12 @@ structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch {
                     ("&") @return_r
                     (function_declarator
                         declarator: (field_identifier) @name
+                        parameters: (parameter_list) @args
                     )
                 )
                 (function_declarator
                     declarator: (field_identifier) @name
+                    parameters: (parameter_list) @args
                 )
             ]
         ) @root
@@ -30,52 +33,11 @@ structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, fmt::Debug, hash::Hash};
-    use crate::{Context, print_node, query::fn_def::{FN_DEF_QUERY, FnDefMatch}};
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    struct MatchLiteral {
-        return_q: Option<&'static str>,
-        return_t: &'static str,
-        return_r: Option<&'static str>,
-        name: &'static str,
-        root: &'static str,
-    }
-
-    impl PartialEq<FnDefMatch<'_>> for MatchLiteral {
-        fn eq(&self, other: &FnDefMatch) -> bool {
-            let Self {
-                return_q, return_t, return_r, name, ..
-            } = self;
-            true
-            && match (other.return_q, return_q) {
-                (Some(orq), Some(srq)) => orq.as_ref() == *srq,
-                (None, None) => true,
-                _ => false,
-            }
-            && other.return_t.as_str().is_ok_and(|t| t == *return_t)
-            && other.return_r.map(|r| r.as_str().ok()).flatten() == *return_r
-            && other.name.as_str().is_ok_and(|t| t == *name)
-        }
-    }
-
-    fn collection_eq<'a>(actual: impl Iterator<Item = FnDefMatch<'a>>, expected: impl IntoIterator<Item = MatchLiteral>){
-        let mut expected: HashSet<_> = expected.into_iter().collect();
-
-        let mut unexpected = vec![];
-        for item in actual {
-            let expected = expected.extract_if(|i| i == &item).next();
-            if expected.is_none() {
-                unexpected.push(item);
-            }
-        }
-        let unmatched: Vec<_> = expected.into_iter().collect();
-
-        assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
-    }
+    use super::*;
+    use crate::{Context, print_node};
 
     #[test]
-    fn simple() {
+    fn test() {
         let header = r#"
             class MyClass {
             public:
@@ -85,12 +47,13 @@ mod test {
             };
         "#;
         let expected = [
-            MatchLiteral {
+            FnDefMatchTest {
                 return_q: Some("const"),
                 return_t: "Session",
                 return_r: Some("&"),
                 name: "my_method",
-                root: header,
+                args: "(int simple_arg, const std::unique_ptr<Class>& complex_arg)",
+                root: "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);",
             },
         ];
 
@@ -98,6 +61,6 @@ mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
 
-        collection_eq(FN_DEF_QUERY.matches(root), expected);
+        crate::query::test::collection_eq(FN_DEF_QUERY.matches(root), expected);
     }
 }
