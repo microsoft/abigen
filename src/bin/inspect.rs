@@ -31,7 +31,8 @@ fn main() {
     let ctx = Context::from_file(&args.header).expect("Failed to load file");
 
     if let Some(ref qtext) = args.query {
-        let q = Query::new(&abigen::LANG, qtext).expect("Failed to compile query");
+        let q =
+            Query::new(&tree_sitter_cpp::LANGUAGE.into(), qtext).expect("Failed to compile query");
         let mut qc = QueryCursor::new();
         let node = ctx.root();
         let mut qm = qc.matches(&q, node.item, ctx.text());

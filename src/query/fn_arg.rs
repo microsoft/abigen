@@ -1,47 +1,49 @@
-use super::structured_query;
+use super::{structured_query, typeref::TyperefQuery};
 
 structured_query!(
-    pub FN_ARG_QUERY / FnArgQuery / FnArgMatch / FnArgMatchTest {
-        arg_q: Option,
-        arg_t: _,
-        arg_name: _,
-        arg_r: Option,
+    pub FN_ARG_QUERY / FnArgQuery / FnArgMatch / FnArgLitrl {
+        typ: TyperefQuery,
+        name: _,
     }, r#"
         (parameter_declaration
-            (type_qualifier)? @arg_q
-            type: (_) @arg_t
             declarator: [
-                (identifier) @arg_name
+                (identifier) @name
                 (reference_declarator
-                    ("&")? @arg_r
-                    (identifier) @arg_name
+                    (identifier) @name
                 )
             ]
-        )
+        ) @typ @root
     "#
 );
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Context, print_node};
+    use crate::{
+        Context, print_node,
+        query::{StructuredMatch, typeref::TyperefLitrl},
+    };
 
     #[test]
     fn test() {
         let code =
             "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
         let expected = [
-            FnArgMatchTest {
-                arg_q: None,
-                arg_t: "int",
-                arg_r: None,
-                arg_name: "simple_arg",
+            FnArgLitrl {
+                typ: TyperefLitrl {
+                    q: None,
+                    t: "int",
+                    r: None,
+                },
+                name: "simple_arg",
             },
-            FnArgMatchTest {
-                arg_q: Some("const"),
-                arg_t: "std::unique_ptr<Class>",
-                arg_r: Some("&"),
-                arg_name: "complex_arg",
+            FnArgLitrl {
+                typ: TyperefLitrl {
+                    q: Some("const"),
+                    t: "std::unique_ptr<Class>",
+                    r: Some("&"),
+                },
+                name: "complex_arg",
             },
         ];
 
@@ -49,6 +51,6 @@ mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
 
-        crate::query::test::collection_eq(FN_ARG_QUERY.matches(root), expected);
+        crate::query::test::collection_eq(FnArgMatch::from_node(&&FN_ARG_QUERY, root), expected);
     }
 }
