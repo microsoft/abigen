@@ -9,5 +9,5 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let api = ApiHeader::from_file(&args.header).expect("Failed to load header");
+    let _api = ApiHeader::from_file(&args.header).expect("Failed to load header");
 }

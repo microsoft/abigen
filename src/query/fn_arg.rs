@@ -51,6 +51,6 @@ mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
 
-        crate::query::test::collection_eq(FnArgMatch::from_node(&&FN_ARG_QUERY, root), expected);
+        crate::query::test::collection_eq(FnArgMatch::from_node(root), expected);
     }
 }

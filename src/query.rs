@@ -17,7 +17,7 @@ pub trait StructuredQuery: Sized {
 pub trait StructuredMatch<'tree>: Sized {
     type Query: StructuredQuery;
 
-    fn from_node(query: &'_ Self::Query, node: InContext<'tree, Node<'tree>>) -> Vec<Self>;
+    fn from_node(node: InContext<'tree, Node<'tree>>) -> Vec<Self>;
     fn depth_from(&self, other: Node<'tree>) -> usize;
 }
 
@@ -98,29 +98,27 @@ macro_rules! structured_query (
         );
 
         macro_rules! field_val (
-            ($query:ident, $ctx:ident, $m:ident, $f:ident, _) => {
+            ($query:expr, $ctx:ident, $m:ident, $f:ident, _) => {
                 $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap())
             };
-            ($query:ident, $ctx:ident, $m:ident, $f:ident, Option) => {
+            ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
                 $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
             };
-            ($query:ident, $ctx:ident, $m:ident, $f:ident, [$sub_q:ty]) => {
+            ($query:expr, $ctx:ident, $m:ident, $f:ident, [$sub_q:ty]) => {
                 $m.nodes_for_capture_index($query.$f).map(|n| {
                     <
                         <$sub_q as $crate::query::StructuredQuery>
                             ::Match<'tree> as $crate::query::StructuredMatch
                     >::from_node(
-                        <$sub_q as $crate::query::StructuredQuery>::inst(),
                         $ctx.wrap(n),
                     ).into_iter()
                 }).flatten().collect()
             };
-            ($query:ident, $ctx:ident, $m:ident, $f:ident, $sub_q:ty) => {
+            ($query:expr, $ctx:ident, $m:ident, $f:ident, $sub_q:ty) => {
                 <
                     <$sub_q as $crate::query::StructuredQuery>
                         ::Match<'tree> as $crate::query::StructuredMatch
                 >::from_node(
-                    <$sub_q as $crate::query::StructuredQuery>::inst(),
                     $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
                 ).into_iter().next().unwrap()
             };
@@ -129,21 +127,23 @@ macro_rules! structured_query (
         #[derive(Clone)]
         $vis struct $match_name <'tree> {
             root: ::tree_sitter::Node<'tree>,
-            $( $field : field_t!($field_t) ),+
+            $( $vis $field : field_t!($field_t) ),+
         }
 
         impl<'tree> $crate::query::StructuredMatch<'tree> for $match_name<'tree> {
             type Query = $query_name;
 
-            fn from_node(query: &'_ Self::Query, node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
+            fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
                 -> Vec<Self> {
                 use ::tree_sitter::StreamingIterator;
+                use $crate::query::StructuredQuery;
+
                 let mut cursor = ::tree_sitter::QueryCursor::new();
-                let mut matches = cursor.matches(&query.query, node.item, node.context.text());
+                let mut matches = cursor.matches(&$query_name::inst().query, node.item, node.context.text());
                 let mut ret = vec![];
 
                 while let Some(m) = matches.next() {
-                    ret.push($match_name::from_match(query, node.context, m));
+                    ret.push($match_name::from_match(node.context, m));
                 }
                 ret.sort_by(|a, b| {
                     <$match_name as $crate::query::StructuredMatch>::depth_from(b, node.item)
@@ -169,10 +169,12 @@ macro_rules! structured_query (
         }
 
         impl<'tree> $match_name<'tree> {
-            fn from_match(query: &$query_name, ctx: &'tree $crate::Context, m: &::tree_sitter::QueryMatch<'_, 'tree>) -> Self {
+            fn from_match(ctx: &'tree $crate::Context, m: &::tree_sitter::QueryMatch<'_, 'tree>) -> Self {
+                use $crate::query::StructuredQuery;
+
                 Self {
-                    root: m.nodes_for_capture_index(query.root).next().unwrap(),
-                    $( $field: field_val!(query, ctx, m, $field, $field_t) ),+
+                    root: m.nodes_for_capture_index($query_name::inst().root).next().unwrap(),
+                    $( $field: field_val!($query_name::inst(), ctx, m, $field, $field_t) ),+
                 }
             }
         }

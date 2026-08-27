@@ -38,7 +38,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        super::super::test::collection_eq(TyperefMatch::from_node(&TYPEREF_QUERY, root), expected);
+        super::super::test::collection_eq(TyperefMatch::from_node(root), expected);
     }
 
     #[test]
@@ -53,6 +53,6 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         print_node(root, 15, 50, true);
-        super::super::test::collection_eq(TyperefMatch::from_node(&TYPEREF_QUERY, root), expected);
+        super::super::test::collection_eq(TyperefMatch::from_node(root), expected);
     }
 }

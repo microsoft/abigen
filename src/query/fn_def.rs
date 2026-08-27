@@ -74,6 +74,6 @@ mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
 
-        crate::query::test::collection_eq(FnDefMatch::from_node(&FN_DEF_QUERY, root), expected);
+        crate::query::test::collection_eq(FnDefMatch::from_node(root), expected);
     }
 }
