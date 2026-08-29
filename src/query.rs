@@ -89,6 +89,9 @@ macro_rules! structured_query (
             (Option) => {
                 Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
             };
+            (Vec) => {
+                Vec<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
+            };
             ([$sub_q:ty]) => {
                 Vec<<$sub_q as $crate::query::StructuredQuery>::Match<'tree>>
             };
@@ -103,6 +106,9 @@ macro_rules! structured_query (
             };
             ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
                 $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
+            };
+            ($query:expr, $ctx:ident, $m:ident, $f:ident, Vec) => {
+                $m.nodes_for_capture_index($query.$f).map(|n| $ctx.wrap(n)).collect()
             };
             ($query:expr, $ctx:ident, $m:ident, $f:ident, [$sub_q:ty]) => {
                 $m.nodes_for_capture_index($query.$f).map(|n| {
@@ -194,6 +200,9 @@ macro_rules! structured_query (
             (Option) => {
                 Option<&'tree str>
             };
+            (Vec) => {
+                Vec<&'tree str>
+            };
             ([$sub_q:ty]) => {
                 Vec<<$sub_q as $crate::query::StructuredQuery>::MatchLiteral<'tree>>
             };
@@ -212,6 +221,9 @@ macro_rules! structured_query (
                     (None, None) => true,
                     _ => false,
                 })
+            };
+            {$self:ident, $other:ident, $f:ident, Vec} => {
+                $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| o.as_str().is_ok_and(|f| f == *s))
             };
             {$self:ident, $other:ident, $f:ident, [$sub_q:ty]} => {
                 $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
@@ -240,7 +252,9 @@ pub(crate) use structured_query;
 
 #[cfg(test)]
 pub mod test {
+    use super::*;
     use std::{collections::HashSet, fmt::Debug, hash::Hash};
+    use crate::{Context, print_node};
 
     pub fn collection_eq<A, E>(
         actual: impl IntoIterator<Item = A>,
@@ -261,5 +275,79 @@ pub mod test {
         let unmatched: Vec<_> = expected.into_iter().collect();
 
         assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
+    }
+
+    structured_query!(pub TEST / TestQuery / TestMatch / TestLitrl {
+        typ: _,
+        size: Option,
+        value: SubQuery,
+    }, r#"
+        (declaration
+            type: (_) @typ
+            declarator: (init_declarator
+                declarator: [
+                    (identifier)
+                    (array_declarator
+                        size: (_) @size
+                    )
+                ]
+                value: (_) @value
+            )
+        ) @root
+    "#);
+
+    structured_query!(pub SUB / SubQuery / SubMatch / SubLitrl {
+        items: Vec,
+    }, r#"
+        [
+            (number_literal) @items
+            (initializer_list
+                (number_literal) @items
+            )
+        ] @root
+    "#);
+
+    #[test]
+    fn simple() {
+        let code = r#"
+            int number = 5;
+        "#;
+        let expected = vec![
+            TestLitrl {
+                typ: "int",
+                size: None,
+                value: SubLitrl {
+                    items: vec!["5"],
+                },
+            }
+        ];
+
+        let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
+        let root = ctx.root();
+        print_node(root, 10, 50, true);
+        
+        collection_eq(TestMatch::from_node(root), expected);
+    }
+
+    #[test]
+    fn complex() {
+        let code = r#"
+            int array[5] = {1, 2, 3, 4, 5};
+        "#;
+        let expected = vec![
+            TestLitrl {
+                typ: "int",
+                size: Some("5"),
+                value: SubLitrl {
+                    items: vec!["1", "2", "3", "4", "5"],
+                },
+            }
+        ];
+
+        let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
+        let root = ctx.root();
+        print_node(root, 10, 50, true);
+        
+        collection_eq(TestMatch::from_node(root), expected);
     }
 }
