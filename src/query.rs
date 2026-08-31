@@ -240,11 +240,9 @@ pub mod test {
         E: Debug + PartialEq + Eq + Hash + PartialEq<A>,
     {
         let mut expected: HashSet<_> = expected.into_iter().collect();
-        println!("Expected: {expected:?}");
 
         let mut unexpected = vec![];
         for item in actual {
-            println!("Actual: {item:?}");
             let expected = expected.extract_if(|i| i == &item).next();
             if expected.is_none() {
                 unexpected.push(item);
