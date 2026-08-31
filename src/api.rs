@@ -73,7 +73,7 @@ impl TryFrom<query::typeref::TyperefMatch<'_>> for ApiTyperef {
         Ok(Self {
             is_const: matches!(value.q.and_then(|s| s.as_str().ok()), Some("const")),
             name: value.t.as_str()?.to_string(),
-            is_ref: value.r.is_some(),
+            is_ref: value.r.len() > 0,
         })
     }
 }

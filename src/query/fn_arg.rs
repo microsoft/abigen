@@ -20,8 +20,7 @@ structured_query!(
 mod test {
     use super::*;
     use crate::{
-        Context, print_node,
-        query::{StructuredMatch, typeref::TyperefLitrl},
+        Context, print_node, query::{StructuredMatch, typeref::{RefLitrl, TyperefLitrl}},
     };
 
     #[test]
@@ -33,7 +32,7 @@ mod test {
                 typ: TyperefLitrl {
                     q: None,
                     t: "int",
-                    r: None,
+                    r: vec![],
                 },
                 name: "simple_arg",
             },
@@ -41,7 +40,7 @@ mod test {
                 typ: TyperefLitrl {
                     q: Some("const"),
                     t: "std::unique_ptr<Class>",
-                    r: Some("&"),
+                    r: vec![RefLitrl { r: "&" }],
                 },
                 name: "complex_arg",
             },

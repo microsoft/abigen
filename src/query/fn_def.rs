@@ -27,10 +27,11 @@ structured_query!(pub FN_DEF_QUERY / FnDefQuery / FnDefMatch / FnDefLitrl {
 
 #[cfg(test)]
 mod test {
-    use super::*;
+    use std::vec;
+
+use super::*;
     use crate::{
-        Context, print_node,
-        query::{StructuredMatch, fn_arg::FnArgLitrl, typeref::TyperefLitrl},
+        Context, print_node, query::{StructuredMatch, fn_arg::FnArgLitrl, typeref::{RefLitrl, TyperefLitrl}},
     };
 
     #[test]
@@ -47,7 +48,7 @@ mod test {
             ret: TyperefLitrl {
                 q: Some("const"),
                 t: "Session",
-                r: Some("&"),
+                r: vec![RefLitrl { r: "&" }],
             },
             name: "my_method",
             args: vec![
@@ -55,7 +56,7 @@ mod test {
                     typ: TyperefLitrl {
                         q: None,
                         t: "int",
-                        r: None,
+                        r: vec![],
                     },
                     name: "simple_arg",
                 },
@@ -63,7 +64,7 @@ mod test {
                     typ: TyperefLitrl {
                         q: Some("const"),
                         t: "std::unique_ptr<Class>",
-                        r: Some("&"),
+                        r: vec![RefLitrl { r: "&" }],
                     },
                     name: "complex_arg",
                 },

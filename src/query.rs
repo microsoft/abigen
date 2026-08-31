@@ -18,7 +18,6 @@ pub trait StructuredMatch<'tree>: Sized {
     type Query: StructuredQuery;
 
     fn from_node(node: InContext<'tree, Node<'tree>>) -> Vec<Self>;
-    fn depth_from(&self, other: Node<'tree>) -> usize;
 }
 
 #[derive(Debug)]
@@ -51,12 +50,11 @@ macro_rules! structured_query (
     ) => {
         static $static_name: std::sync::LazyLock<$query_name> = std::sync::LazyLock::new(|| {
             use $crate::query::StructuredQuery;
-            $query_name::compile().expect(concat!("Failed to compile query", stringify!($query_name)))
+            $query_name::compile().expect(concat!("Failed to compile query ", stringify!($query_name)))
         });
 
         $vis struct $query_name {
             query: ::tree_sitter::Query,
-            root: u32,
             $( $field: u32, )*
         }
 
@@ -71,8 +69,6 @@ macro_rules! structured_query (
             fn compile() -> Result<Self, $crate::query::StructuredQueryError> {
                 let q = ::tree_sitter::Query::new(&$crate::LANG, $query_text)?;
                 Ok(Self {
-                    root: q.capture_index_for_name("root")
-                        .ok_or_else(|| $crate::query::StructuredQueryError::Capture("root"))?,
                     $(
                         $field: q.capture_index_for_name(stringify!($field))
                             .ok_or_else(|| $crate::query::StructuredQueryError::Capture(stringify!($field)))?
@@ -89,9 +85,6 @@ macro_rules! structured_query (
             (Option) => {
                 Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
             };
-            (Vec) => {
-                Vec<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
-            };
             ([$sub_q:ty]) => {
                 Vec<<$sub_q as $crate::query::StructuredQuery>::Match<'tree>>
             };
@@ -100,15 +93,42 @@ macro_rules! structured_query (
             };
         );
 
+        #[derive(Clone, std::hash::Hash)]
+        $vis struct $match_name <'tree> {
+            $( $vis $field : field_t!($field_t), )+
+            byte_range: std::ops::Range<usize>,
+        }
+
+        impl<'tree> $crate::query::StructuredMatch<'tree> for $match_name<'tree> {
+            type Query = $query_name;
+
+            fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
+                -> Vec<Self> {
+                use ::tree_sitter::StreamingIterator;
+                use $crate::query::StructuredQuery;
+
+                let mut cursor = ::tree_sitter::QueryCursor::new();
+                let mut matches = cursor.matches(&$query_name::inst().query, node.item, node.context.text());
+                let mut ret = vec![];
+
+                while let Some(m) = matches.next() {
+                    ret.push($match_name::from_match(node.context, m));
+                }
+                ret.sort_by(|a, b| {
+                    a.byte_range.start.cmp(&b.byte_range.start)
+                        .then(a.byte_range.end.cmp(&b.byte_range.end).reverse())
+                });
+
+                ret
+            }
+        }
+
         macro_rules! field_val (
             ($query:expr, $ctx:ident, $m:ident, $f:ident, _) => {
                 $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap())
             };
             ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
                 $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
-            };
-            ($query:expr, $ctx:ident, $m:ident, $f:ident, Vec) => {
-                $m.nodes_for_capture_index($query.$f).map(|n| $ctx.wrap(n)).collect()
             };
             ($query:expr, $ctx:ident, $m:ident, $f:ident, [$sub_q:ty]) => {
                 $m.nodes_for_capture_index($query.$f).map(|n| {
@@ -130,57 +150,18 @@ macro_rules! structured_query (
             };
         );
 
-        #[derive(Clone)]
-        $vis struct $match_name <'tree> {
-            root: ::tree_sitter::Node<'tree>,
-            $( $vis $field : field_t!($field_t) ),+
-        }
-
-        impl<'tree> $crate::query::StructuredMatch<'tree> for $match_name<'tree> {
-            type Query = $query_name;
-
-            fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
-                -> Vec<Self> {
-                use ::tree_sitter::StreamingIterator;
-                use $crate::query::StructuredQuery;
-
-                let mut cursor = ::tree_sitter::QueryCursor::new();
-                let mut matches = cursor.matches(&$query_name::inst().query, node.item, node.context.text());
-                let mut ret = vec![];
-
-                while let Some(m) = matches.next() {
-                    ret.push($match_name::from_match(node.context, m));
-                }
-                ret.sort_by(|a, b| {
-                    <$match_name as $crate::query::StructuredMatch>::depth_from(b, node.item)
-                        .cmp(&<$match_name as $crate::query::StructuredMatch>::depth_from(a, node.item))
-                });
-
-                ret
-            }
-
-            fn depth_from(&self, other: ::tree_sitter::Node<'tree>) -> usize {
-                let mut d = 0;
-                let mut parent = self.root;
-                while let Some(p) = parent.parent() {
-                    d += 1;
-                    if (p == other) {
-                        return d;
-                    } else {
-                        parent = p;
-                    }
-                }
-                usize::MAX
-            }
-        }
-
         impl<'tree> $match_name<'tree> {
             fn from_match(ctx: &'tree $crate::Context, m: &::tree_sitter::QueryMatch<'_, 'tree>) -> Self {
                 use $crate::query::StructuredQuery;
 
+                let byte_range = m.captures.iter()
+                    .fold(None, |acc, c| {
+                        let acc = acc.unwrap_or(c.node.byte_range());
+                        Some(acc.start.min(c.node.start_byte()) .. acc.end.max(c.node.end_byte()))
+                    }).unwrap();
                 Self {
-                    root: m.nodes_for_capture_index($query_name::inst().root).next().unwrap(),
-                    $( $field: field_val!($query_name::inst(), ctx, m, $field, $field_t) ),+
+                    $( $field: field_val!($query_name::inst(), ctx, m, $field, $field_t), )+
+                    byte_range,
                 }
             }
         }
@@ -200,9 +181,6 @@ macro_rules! structured_query (
             (Option) => {
                 Option<&'tree str>
             };
-            (Vec) => {
-                Vec<&'tree str>
-            };
             ([$sub_q:ty]) => {
                 Vec<<$sub_q as $crate::query::StructuredQuery>::MatchLiteral<'tree>>
             };
@@ -210,6 +188,12 @@ macro_rules! structured_query (
                 <$sub_q as $crate::query::StructuredQuery>::MatchLiteral<'tree>
             };
         );
+
+        #[allow(unused)]
+        #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
+        $vis struct $test_name <'tree> {
+            $( $vis $field : test_t!($field_t) ),+
+        }
 
         macro_rules! test_eq (
             ($self:ident, $other:ident, $f:ident, _) => {
@@ -222,22 +206,14 @@ macro_rules! structured_query (
                     _ => false,
                 })
             };
-            {$self:ident, $other:ident, $f:ident, Vec} => {
-                $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| o.as_str().is_ok_and(|f| f == *s))
-            };
             {$self:ident, $other:ident, $f:ident, [$sub_q:ty]} => {
-                $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
+                $self.$f.len() == $other.$f.len()
+                    && $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
             };
             {$self:ident, $other:ident, $f:ident, $sub_q:ty} => {
                 $self.$f == $other.$f
             };
         );
-
-        #[allow(unused)]
-        #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
-        $vis struct $test_name <'tree> {
-            $( $vis $field : test_t!($field_t) ),+
-        }
 
         impl<'tree> PartialEq<$match_name<'tree>> for $test_name<'tree> {
             fn eq(&self, other: &$match_name<'tree>) -> bool {
@@ -264,9 +240,11 @@ pub mod test {
         E: Debug + PartialEq + Eq + Hash + PartialEq<A>,
     {
         let mut expected: HashSet<_> = expected.into_iter().collect();
+        println!("Expected: {expected:?}");
 
         let mut unexpected = vec![];
         for item in actual {
+            println!("Actual: {item:?}");
             let expected = expected.extract_if(|i| i == &item).next();
             if expected.is_none() {
                 unexpected.push(item);
@@ -280,7 +258,6 @@ pub mod test {
     structured_query!(pub TEST / TestQuery / TestMatch / TestLitrl {
         typ: _,
         size: Option,
-        value: SubQuery,
     }, r#"
         (declaration
             type: (_) @typ
@@ -291,20 +268,8 @@ pub mod test {
                         size: (_) @size
                     )
                 ]
-                value: (_) @value
             )
         ) @root
-    "#);
-
-    structured_query!(pub SUB / SubQuery / SubMatch / SubLitrl {
-        items: Vec,
-    }, r#"
-        [
-            (number_literal) @items
-            (initializer_list
-                (number_literal) @items
-            )
-        ] @root
     "#);
 
     #[test]
@@ -316,9 +281,6 @@ pub mod test {
             TestLitrl {
                 typ: "int",
                 size: None,
-                value: SubLitrl {
-                    items: vec!["5"],
-                },
             }
         ];
 
@@ -338,9 +300,6 @@ pub mod test {
             TestLitrl {
                 typ: "int",
                 size: Some("5"),
-                value: SubLitrl {
-                    items: vec!["1", "2", "3", "4", "5"],
-                },
             }
         ];
 
