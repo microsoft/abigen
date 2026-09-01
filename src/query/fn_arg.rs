@@ -1,6 +1,6 @@
-use super::{structured_query, typeref::Typeref};
+use super::{Typeref, structured_query};
 
-structured_query!{
+structured_query! {
     name: pub FnArg,
     fields: {
         typ: Typeref,
@@ -14,16 +14,14 @@ structured_query!{
                     (identifier) @name
                 )
             ]
-        ) @typ @root
+        ) @typ
     "#
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        Context, print_node, query::{StructuredMatch, typeref::{Typeref, Ref}},
-    };
+    use crate::{Context, print_node, query::Ref};
 
     #[test]
     fn test() {

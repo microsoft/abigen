@@ -1,6 +1,9 @@
 use std::{path::Path, str::Utf8Error};
 
-use crate::{Context, ContextError, query::{StructuredMatch, fn_def::FnDef, fn_arg::FnArg, typeref::Typeref}};
+use crate::{
+    Context, ContextError,
+    query::{FnArg, FnDef, Typeref},
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiHeader {
@@ -10,7 +13,7 @@ pub struct ApiHeader {
 impl ApiHeader {
     pub fn from_file(file: &Path) -> Result<Self, ContextError> {
         let mut s = Self::default();
-        
+
         let ctx = Context::from_file(file)?;
         for m in FnDef::Match::from_node(ctx.root()) {
             s.functions.push(m.try_into()?);

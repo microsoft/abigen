@@ -1,6 +1,6 @@
 use super::structured_query;
 
-structured_query!{
+structured_query! {
     name: pub Ref,
     fields: { r: _ },
     query: r#"
@@ -13,11 +13,11 @@ structured_query!{
                 ("*") @r
                 declarator: [(pointer_declarator) (identifier)]
             )
-        ] @root
+        ]
     "#,
 }
 
-structured_query!{
+structured_query! {
     name: pub Typeref,
     fields: {
         q: Option,
@@ -29,16 +29,14 @@ structured_query!{
             (type_qualifier)? @q
             type: [(primitive_type) (type_identifier) (qualified_identifier)] @t
             declarator: (_) @r
-        ) @root
+        )
     "#,
 }
 
-
 #[cfg(test)]
 mod test {
-    use crate::{Context, print_node, query::StructuredMatch};
-
     use super::*;
+    use crate::{Context, print_node};
 
     #[test]
     fn simple() {
@@ -121,7 +119,11 @@ mod test {
         let expected = [Typeref::Literal {
             q: None,
             t: "Session",
-            r: vec![Ref::Literal { r: "*" }, Ref::Literal { r: "*" }, Ref::Literal { r: "*" }],
+            r: vec![
+                Ref::Literal { r: "*" },
+                Ref::Literal { r: "*" },
+                Ref::Literal { r: "*" },
+            ],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
