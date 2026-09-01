@@ -1,6 +1,6 @@
 use std::{path::Path, str::Utf8Error};
 
-use crate::{Context, ContextError, query::{self, StructuredMatch, fn_def::FnDefMatch}};
+use crate::{Context, ContextError, query::{StructuredMatch, fn_def::FnDef, fn_arg::FnArg, typeref::Typeref}};
 
 #[derive(Debug, Clone, Default)]
 pub struct ApiHeader {
@@ -12,7 +12,7 @@ impl ApiHeader {
         let mut s = Self::default();
         
         let ctx = Context::from_file(file)?;
-        for m in FnDefMatch::from_node(ctx.root()) {
+        for m in FnDef::Match::from_node(ctx.root()) {
             s.functions.push(m.try_into()?);
         }
 
@@ -27,10 +27,10 @@ pub struct ApiFnDef {
     pub args: Vec<ApiFnArg>,
 }
 
-impl TryFrom<query::fn_def::FnDefMatch<'_>> for ApiFnDef {
+impl TryFrom<FnDef::Match<'_>> for ApiFnDef {
     type Error = Utf8Error;
-    fn try_from(value: query::fn_def::FnDefMatch) -> Result<Self, Utf8Error> {
-        let args_r: Vec<Result<_, _>> = value.args.into_iter().map(|a| a.try_into()).collect();
+    fn try_from(value: FnDef::Match) -> Result<Self, Utf8Error> {
+        let args_r: Vec<Result<_, _>> = value.decl.args.into_iter().map(|a| a.try_into()).collect();
         let mut args = vec![];
         for r in args_r {
             args.push(r?);
@@ -38,7 +38,7 @@ impl TryFrom<query::fn_def::FnDefMatch<'_>> for ApiFnDef {
 
         Ok(Self {
             ret: value.ret.try_into()?,
-            name: value.name.as_str()?.to_string(),
+            name: value.decl.name.as_str()?.to_string(),
             args,
         })
     }
@@ -50,9 +50,9 @@ pub struct ApiFnArg {
     pub name: String,
 }
 
-impl TryFrom<query::fn_arg::FnArgMatch<'_>> for ApiFnArg {
+impl TryFrom<FnArg::Match<'_>> for ApiFnArg {
     type Error = Utf8Error;
-    fn try_from(value: query::fn_arg::FnArgMatch) -> Result<Self, Utf8Error> {
+    fn try_from(value: FnArg::Match) -> Result<Self, Utf8Error> {
         Ok(Self {
             typ: value.typ.try_into()?,
             name: value.name.as_str()?.to_string(),
@@ -67,9 +67,9 @@ pub struct ApiTyperef {
     pub is_ref: bool,
 }
 
-impl TryFrom<query::typeref::TyperefMatch<'_>> for ApiTyperef {
+impl TryFrom<Typeref::Match<'_>> for ApiTyperef {
     type Error = Utf8Error;
-    fn try_from(value: query::typeref::TyperefMatch<'_>) -> Result<Self, Utf8Error> {
+    fn try_from(value: Typeref::Match<'_>) -> Result<Self, Utf8Error> {
         Ok(Self {
             is_const: matches!(value.q.and_then(|s| s.as_str().ok()), Some("const")),
             name: value.t.as_str()?.to_string(),

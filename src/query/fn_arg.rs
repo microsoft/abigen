@@ -1,10 +1,12 @@
-use super::{structured_query, typeref::TyperefQuery};
+use super::{structured_query, typeref::Typeref};
 
-structured_query!(
-    pub FN_ARG_QUERY / FnArgQuery / FnArgMatch / FnArgLitrl {
-        typ: TyperefQuery,
+structured_query!{
+    name: pub FnArg,
+    fields: {
+        typ: Typeref,
         name: _,
-    }, r#"
+    },
+    query: r#"
         (parameter_declaration
             declarator: [
                 (identifier) @name
@@ -14,13 +16,13 @@ structured_query!(
             ]
         ) @typ @root
     "#
-);
+}
 
 #[cfg(test)]
 mod test {
     use super::*;
     use crate::{
-        Context, print_node, query::{StructuredMatch, typeref::{RefLitrl, TyperefLitrl}},
+        Context, print_node, query::{StructuredMatch, typeref::{Typeref, Ref}},
     };
 
     #[test]
@@ -28,19 +30,19 @@ mod test {
         let code =
             "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
         let expected = [
-            FnArgLitrl {
-                typ: TyperefLitrl {
+            FnArg::Literal {
+                typ: Typeref::Literal {
                     q: None,
                     t: "int",
                     r: vec![],
                 },
                 name: "simple_arg",
             },
-            FnArgLitrl {
-                typ: TyperefLitrl {
+            FnArg::Literal {
+                typ: Typeref::Literal {
                     q: Some("const"),
                     t: "std::unique_ptr<Class>",
-                    r: vec![RefLitrl { r: "&" }],
+                    r: vec![Ref::Literal { r: "&" }],
                 },
                 name: "complex_arg",
             },
@@ -50,6 +52,6 @@ mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
 
-        crate::query::test::collection_eq(FnArgMatch::from_node(root), expected);
+        crate::query::test::collection_eq(FnArg::Match::from_node(root), expected);
     }
 }

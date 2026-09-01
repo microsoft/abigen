@@ -8,7 +8,7 @@ pub(crate) mod typeref;
 
 pub trait StructuredQuery: Sized {
     type Match<'tree>: StructuredMatch<'tree>;
-    type MatchLiteral<'tree>: PartialEq<Self::Match<'tree>>;
+    type Literal<'tree>: PartialEq<Self::Match<'tree>>;
 
     fn inst() -> &'static Self;
     fn compile() -> Result<Self, StructuredQueryError>;
@@ -41,190 +41,191 @@ impl Display for StructuredQueryError {
 }
 impl std::error::Error for StructuredQueryError {}
 
-macro_rules! structured_query (
+macro_rules! field_t (
+    (_) => {
+        $crate::InContext<'tree, ::tree_sitter::Node<'tree>>
+    };
+    (Option) => {
+        Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
+    };
+    ([$($sub_q:ident)::+]) => {
+        Vec<$($sub_q)::+::Match<'tree>>
+    };
+    ($($sub_q:ident)::+) => {
+        $($sub_q)::+::Match<'tree>
+    };
+);
+
+macro_rules! field_val (
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, _) => {
+        $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
+        Some($m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n)))
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, [$($sub_q:ident)::+]) => {
+        Some($m.nodes_for_capture_index($query.$f).map(|n| {
+            <$($sub_q)::+::Match as $crate::query::StructuredMatch>::from_node(
+                $ctx.wrap(n),
+            ).into_iter()
+        }).flatten().collect())
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, $($sub_q:ident)::+) => {
+        <$($sub_q)::+::Match as $crate::query::StructuredMatch>::from_node(
+            $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
+        ).into_iter().next()
+    };
+);
+
+macro_rules! test_t (
+    (_) => {
+        &'tree str
+    };
+    (Option) => {
+        Option<&'tree str>
+    };
+    ([$($sub_q:ident)::+]) => {
+        Vec<$($sub_q)::+::Literal<'tree>>
+    };
+    ($($sub_q:ident)::+) => {
+        $($sub_q)::+::Literal<'tree>
+    };
+);
+
+macro_rules! test_eq (
+    ($self:ident, $other:ident, $f:ident, _) => {
+        $other.$f.as_str().is_ok_and(|f| f == $self.$f)
+    };
+    ($self:ident, $other:ident, $f:ident, Option) => {
+        (match ($self.$f, $other.$f) {
+            (Some(s), Some(o)) => o.as_str().is_ok_and(|f| f == s),
+            (None, None) => true,
+            _ => false,
+        })
+    };
+    ($self:ident, $other:ident, $f:ident, [$($sub_q:ident)::+]) => {
+        $self.$f.len() == $other.$f.len()
+            && $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
+    };
+    ($self:ident, $other:ident, $f:ident, $($sub_q:ident)::+) => {
+        $self.$f == $other.$f
+    };
+);
+
+
+macro_rules! structured_query {
     (
-        $vis:vis $static_name:ident / $query_name:ident / $match_name:ident / $test_name:ident {
+        name: $vis:vis $name:ident,
+        fields: {
             $( $field:ident: $field_t:tt ),+ $(,)?
         },
-        $query_text:literal
+        query: $query_text:literal $(,)?
     ) => {
-        static $static_name: std::sync::LazyLock<$query_name> = std::sync::LazyLock::new(|| {
-            use $crate::query::StructuredQuery;
-            $query_name::compile().expect(concat!("Failed to compile query ", stringify!($query_name)))
-        });
+        #[allow(non_snake_case)]
+        $vis mod $name {
+            use super::*;
 
-        $vis struct $query_name {
-            query: ::tree_sitter::Query,
-            $( $field: u32, )*
-        }
-
-        impl $crate::query::StructuredQuery for $query_name {
-            type Match<'tree> = $match_name<'tree>;
-            type MatchLiteral<'tree> = $test_name<'tree>;
-
-            fn inst() -> &'static Self {
-                &$static_name
-            }
-
-            fn compile() -> Result<Self, $crate::query::StructuredQueryError> {
-                let q = ::tree_sitter::Query::new(&$crate::LANG, $query_text)?;
-                Ok(Self {
-                    $(
-                        $field: q.capture_index_for_name(stringify!($field))
-                            .ok_or_else(|| $crate::query::StructuredQueryError::Capture(stringify!($field)))?
-                    , )*
-                    query: q,
-                })
-            }
-        }
-
-        macro_rules! field_t (
-            (_) => {
-                $crate::InContext<'tree, ::tree_sitter::Node<'tree>>
-            };
-            (Option) => {
-                Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
-            };
-            ([$sub_q:ty]) => {
-                Vec<<$sub_q as $crate::query::StructuredQuery>::Match<'tree>>
-            };
-            ($sub_q:ty) => {
-                <$sub_q as $crate::query::StructuredQuery>::Match<'tree>
-            };
-        );
-
-        #[derive(Clone, std::hash::Hash)]
-        $vis struct $match_name <'tree> {
-            $( $vis $field : field_t!($field_t), )+
-            byte_range: std::ops::Range<usize>,
-        }
-
-        impl<'tree> $crate::query::StructuredMatch<'tree> for $match_name<'tree> {
-            type Query = $query_name;
-
-            fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
-                -> Vec<Self> {
-                use ::tree_sitter::StreamingIterator;
+            pub static QUERY_INST: std::sync::LazyLock<Query> = std::sync::LazyLock::new(|| {
                 use $crate::query::StructuredQuery;
+                Query::compile().expect(concat!("Failed to compile query ", stringify!($name)))
+            });
 
-                let mut cursor = ::tree_sitter::QueryCursor::new();
-                let mut matches = cursor.matches(&$query_name::inst().query, node.item, node.context.text());
-                let mut ret = vec![];
+            pub struct Query {
+                query: ::tree_sitter::Query,
+                $( $field: u32, )*
+            }
 
-                while let Some(m) = matches.next() {
-                    ret.push($match_name::from_match(node.context, m));
+            impl $crate::query::StructuredQuery for Query {
+                type Match<'tree> = Match<'tree>;
+                type Literal<'tree> = Literal<'tree>;
+
+                fn inst() -> &'static Self {
+                    &QUERY_INST
                 }
-                ret.sort_by(|a, b| {
-                    a.byte_range.start.cmp(&b.byte_range.start)
-                        .then(a.byte_range.end.cmp(&b.byte_range.end).reverse())
-                });
 
-                ret
-            }
-        }
-
-        macro_rules! field_val (
-            ($query:expr, $ctx:ident, $m:ident, $f:ident, _) => {
-                $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap())
-            };
-            ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
-                $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
-            };
-            ($query:expr, $ctx:ident, $m:ident, $f:ident, [$sub_q:ty]) => {
-                $m.nodes_for_capture_index($query.$f).map(|n| {
-                    <
-                        <$sub_q as $crate::query::StructuredQuery>
-                            ::Match<'tree> as $crate::query::StructuredMatch
-                    >::from_node(
-                        $ctx.wrap(n),
-                    ).into_iter()
-                }).flatten().collect()
-            };
-            ($query:expr, $ctx:ident, $m:ident, $f:ident, $sub_q:ty) => {
-                <
-                    <$sub_q as $crate::query::StructuredQuery>
-                        ::Match<'tree> as $crate::query::StructuredMatch
-                >::from_node(
-                    $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
-                ).into_iter().next().unwrap()
-            };
-        );
-
-        impl<'tree> $match_name<'tree> {
-            fn from_match(ctx: &'tree $crate::Context, m: &::tree_sitter::QueryMatch<'_, 'tree>) -> Self {
-                use $crate::query::StructuredQuery;
-
-                let byte_range = m.captures.iter()
-                    .fold(None, |acc, c| {
-                        let acc = acc.unwrap_or(c.node.byte_range());
-                        Some(acc.start.min(c.node.start_byte()) .. acc.end.max(c.node.end_byte()))
-                    }).unwrap();
-                Self {
-                    $( $field: field_val!($query_name::inst(), ctx, m, $field, $field_t), )+
-                    byte_range,
+                fn compile() -> Result<Self, $crate::query::StructuredQueryError> {
+                    let q = ::tree_sitter::Query::new(&$crate::LANG, $query_text)?;
+                    Ok(Self {
+                        $(
+                            $field: q.capture_index_for_name(stringify!($field))
+                                .ok_or_else(|| $crate::query::StructuredQueryError::Capture(stringify!($field)))?
+                        , )*
+                        query: q,
+                    })
                 }
             }
-        }
 
-        impl std::fmt::Debug for $match_name<'_> {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{} {{ ", stringify!($match_name))?;
-                $( write!(f, "{}: {:?}, ", stringify!($field), self.$field)?; )+
-                Ok(())
+            #[derive(Clone, std::hash::Hash)]
+            pub struct Match<'tree> {
+                $( pub $field : $crate::query::field_t!($field_t), )+
+                byte_range: std::ops::Range<usize>,
             }
-        }
 
-        macro_rules! test_t (
-            (_) => {
-                &'tree str
-            };
-            (Option) => {
-                Option<&'tree str>
-            };
-            ([$sub_q:ty]) => {
-                Vec<<$sub_q as $crate::query::StructuredQuery>::MatchLiteral<'tree>>
-            };
-            ($sub_q:ty) => {
-                <$sub_q as $crate::query::StructuredQuery>::MatchLiteral<'tree>
-            };
-        );
+            impl<'tree> $crate::query::StructuredMatch<'tree> for Match<'tree> {
+                type Query = Query;
 
-        #[allow(unused)]
-        #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
-        $vis struct $test_name <'tree> {
-            $( $vis $field : test_t!($field_t) ),+
-        }
+                fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
+                    -> Vec<Self> {
+                    use ::tree_sitter::StreamingIterator;
 
-        macro_rules! test_eq (
-            ($self:ident, $other:ident, $f:ident, _) => {
-                $other.$f.as_str().is_ok_and(|f| f == $self.$f)
-            };
-            ($self:ident, $other:ident, $f:ident, Option) => {
-                (match ($self.$f, $other.$f) {
-                    (Some(s), Some(o)) => o.as_str().is_ok_and(|f| f == s),
-                    (None, None) => true,
-                    _ => false,
-                })
-            };
-            {$self:ident, $other:ident, $f:ident, [$sub_q:ty]} => {
-                $self.$f.len() == $other.$f.len()
-                    && $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
-            };
-            {$self:ident, $other:ident, $f:ident, $sub_q:ty} => {
-                $self.$f == $other.$f
-            };
-        );
+                    let mut cursor = ::tree_sitter::QueryCursor::new();
+                    let mut matches = cursor.matches(&QUERY_INST.query, node.item, node.context.text());
+                    let mut ret = vec![];
 
-        impl<'tree> PartialEq<$match_name<'tree>> for $test_name<'tree> {
-            fn eq(&self, other: &$match_name<'tree>) -> bool {
-                [
-                    $( test_eq!(self, other, $field, $field_t) ),+
-                ].into_iter().all(|v| v)
+                    while let Some(m) = matches.next() {
+                        if let Some(m) = Match::from_match(node.context, m) {
+                            ret.push(m);
+                        }
+                    }
+                    ret.sort_by(|a, b| {
+                        a.byte_range.start.cmp(&b.byte_range.start)
+                            .then(a.byte_range.end.cmp(&b.byte_range.end).reverse())
+                    });
+
+                    ret
+                }
+            }
+
+            impl<'tree> Match<'tree> {
+                fn from_match(ctx: &'tree $crate::Context, m: &::tree_sitter::QueryMatch<'_, 'tree>) -> Option<Self> {
+                    let byte_range = m.captures.iter()
+                        .fold(None, |acc, c| {
+                            let acc = acc.unwrap_or(c.node.byte_range());
+                            Some(acc.start.min(c.node.start_byte()) .. acc.end.max(c.node.end_byte()))
+                        }).unwrap();
+                    Some(Self {
+                        $( $field: $crate::query::field_val!(QUERY_INST, ctx, m, $field, $field_t).unwrap(), )+
+                        byte_range,
+                    })
+                }
+            }
+
+            impl std::fmt::Debug for Match<'_> {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}::Match {{ ", stringify!($name))?;
+                    $( write!(f, "{}: {:?}, ", stringify!($field), self.$field)?; )+
+                    write!(f, "}}")?;
+                    Ok(())
+                }
+            }
+
+            #[allow(unused)]
+            #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
+            pub struct Literal<'tree> {
+                $( pub $field : $crate::query::test_t!($field_t) ),+
+            }
+
+            impl<'tree> PartialEq<Match<'tree>> for Literal<'tree> {
+                fn eq(&self, other: &Match<'tree>) -> bool {
+                    [
+                        $( $crate::query::test_eq!(self, other, $field, $field_t) ),+
+                    ].into_iter().all(|v| v)
+                }
             }
         }
     };
-);
-pub(crate) use structured_query;
+}
+pub(crate) use {field_t, field_val, test_t, test_eq, structured_query};
 
 #[cfg(test)]
 pub mod test {
@@ -253,22 +254,26 @@ pub mod test {
         assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
     }
 
-    structured_query!(pub TEST / TestQuery / TestMatch / TestLitrl {
-        typ: _,
-        size: Option,
-    }, r#"
-        (declaration
-            type: (_) @typ
-            declarator: (init_declarator
-                declarator: [
-                    (identifier)
-                    (array_declarator
-                        size: (_) @size
-                    )
-                ]
-            )
-        ) @root
-    "#);
+    structured_query!{
+        name: pub Q,
+        fields: {
+            typ: _,
+            size: Option,
+        },
+        query: r#"
+            (declaration
+                type: (_) @typ
+                declarator: (init_declarator
+                    declarator: [
+                        (identifier)
+                        (array_declarator
+                            size: (_) @size
+                        )
+                    ]
+                )
+            ) @root
+        "#,
+    }
 
     #[test]
     fn simple() {
@@ -276,7 +281,7 @@ pub mod test {
             int number = 5;
         "#;
         let expected = vec![
-            TestLitrl {
+            Q::Literal {
                 typ: "int",
                 size: None,
             }
@@ -286,7 +291,7 @@ pub mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
         
-        collection_eq(TestMatch::from_node(root), expected);
+        collection_eq(Q::Match::from_node(root), expected);
     }
 
     #[test]
@@ -295,7 +300,7 @@ pub mod test {
             int array[5] = {1, 2, 3, 4, 5};
         "#;
         let expected = vec![
-            TestLitrl {
+            Q::Literal {
                 typ: "int",
                 size: Some("5"),
             }
@@ -305,6 +310,6 @@ pub mod test {
         let root = ctx.root();
         print_node(root, 10, 50, true);
         
-        collection_eq(TestMatch::from_node(root), expected);
+        collection_eq(Q::Match::from_node(root), expected);
     }
 }
