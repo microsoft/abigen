@@ -1,14 +1,8 @@
 use std::fmt::Display;
 use tree_sitter::QueryError;
 
-mod fn_arg;
-pub(crate) use fn_arg::*;
-
 mod fn_def;
 pub(crate) use fn_def::*;
-
-mod typeref;
-pub(crate) use typeref::*;
 
 #[derive(Debug)]
 pub enum StructuredQueryError {
@@ -33,10 +27,10 @@ impl std::error::Error for StructuredQueryError {}
 
 macro_rules! field_t (
     (_) => {
-        $crate::InContext<'tree, ::tree_sitter::Node<'tree>>
+        $crate::ContextNode<'tree>
     };
     (Option) => {
-        Option<$crate::InContext<'tree, ::tree_sitter::Node<'tree>>>
+        Option<$crate::ContextNode<'tree>>
     };
     ([$($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Match<'tree>>
@@ -144,12 +138,12 @@ macro_rules! structured_query {
         }
 
         impl<'tree> Match<'tree> {
-            pub fn from_node(node: $crate::InContext<'tree, ::tree_sitter::Node<'tree>>)
+            pub fn from_node(node: $crate::ContextNode<'tree>)
                 -> Vec<Self> {
                 use ::tree_sitter::StreamingIterator;
 
                 let mut cursor = ::tree_sitter::QueryCursor::new();
-                let mut matches = cursor.matches(&QUERY_INST.query, node.item, node.context.text());
+                let mut matches = cursor.matches(&QUERY_INST.query, node.node, node.context.text());
                 let mut ret = vec![];
 
                 while let Some(m) = matches.next() {

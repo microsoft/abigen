@@ -90,10 +90,10 @@ impl Context {
         Ok(Self { text: buf, tree })
     }
 
-    pub fn root<'t>(&'t self) -> InContext<'t, Node<'t>> {
-        InContext {
+    pub fn root<'t>(&'t self) -> ContextNode<'t> {
+        ContextNode {
             context: self,
-            item: self.tree.root_node(),
+            node: self.tree.root_node(),
         }
     }
 
@@ -101,33 +101,59 @@ impl Context {
         &self.text as &[u8]
     }
 
-    pub fn wrap<T>(&self, item: T) -> InContext<'_, T> {
-        InContext {
-            item,
+    pub fn wrap<'t>(&'t self, node: Node<'t>) -> ContextNode<'t> {
+        ContextNode {
+            node,
             context: self,
         }
     }
 }
 
 #[derive(Clone, Copy, std::hash::Hash)]
-pub struct InContext<'t, T> {
+pub struct ContextNode<'t> {
     pub context: &'t Context,
-    pub item: T,
+    pub node: Node<'t>,
 }
 
-impl<'t> InContext<'t, Node<'t>> {
-    pub fn walk(&'t self) -> InContext<'t, TreeCursor<'t>> {
-        self.context.wrap(self.item.walk())
+impl<'t> ContextNode<'t> {
+    pub fn walk(&'t self) -> ContextCursor<'t> {
+        ContextCursor {
+            context: self.context,
+            cursor: self.node.walk(),
+        }
+    }
+
+    pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
+        self.node.utf8_text(self.context.text())
     }
 }
-impl<'t> Into<Node<'t>> for InContext<'t, Node<'t>> {
+
+impl<'t> Into<Node<'t>> for ContextNode<'t> {
     fn into(self) -> Node<'t> {
-        self.item
+        self.node
     }
 }
 
-impl<'t> InContext<'t, TreeCursor<'t>> {
-    pub fn node(&self) -> InContext<'t, Node<'t>> {
-        self.context.wrap(self.item.node())
+impl<'a> std::fmt::Debug for ContextNode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.as_str().map_err(|_| std::fmt::Error)?)
+    }
+}
+
+impl<'a> AsRef<str> for ContextNode<'a> {
+    fn as_ref(&self) -> &str {
+        self.as_str().expect("Bad utf8")
+    }
+}
+
+#[derive(Clone)]
+pub struct ContextCursor<'t> {
+    pub context: &'t Context,
+    pub cursor: TreeCursor<'t>,
+}
+
+impl<'t> ContextCursor<'t> {
+    pub fn node(&self) -> ContextNode<'t> {
+        self.context.wrap(self.cursor.node())
     }
 }
