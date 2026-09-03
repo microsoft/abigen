@@ -1,6 +1,6 @@
-use std::fmt::Display;
-use std::borrow::Cow;
 use crate::{ApiFnArg, ApiFnDef, ApiTyperef, RefType};
+use std::borrow::Cow;
+use std::fmt::Display;
 
 impl ApiFnDef {
     pub fn header(&self) -> FnDefHeader<'_> {
@@ -25,7 +25,9 @@ impl<'a> From<ApiFnDef> for FnDefHeader<'a> {
 }
 impl Display for FnDefHeader<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "extern \"C\" {ret} {name}(",
+        write!(
+            f,
+            "extern \"C\" {ret} {name}(",
             ret = TyperefHeader::from(&self.0.ret),
             name = self.0.name,
         )?;
@@ -50,7 +52,9 @@ impl<'a> From<&'a ApiFnArg> for FnArgHeader<'a> {
 }
 impl Display for FnArgHeader<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{typ} {name}",
+        write!(
+            f,
+            "{typ} {name}",
             typ = TyperefHeader::from(&self.0.typ),
             name = self.0.name,
         )?;
@@ -75,16 +79,16 @@ impl Display for TyperefHeader<'_> {
         match self.0.relation {
             RefType::OwnedReference => {
                 write!(f, "&&")?;
-            },
+            }
             RefType::Reference => {
                 write!(f, "&")?;
-            },
-            RefType::Value => {},
+            }
+            RefType::Value => {}
             RefType::Pointer(depth) => {
                 for _ in 0..depth {
                     write!(f, "*")?;
                 }
-            },
+            }
         }
 
         Ok(())
@@ -108,10 +112,14 @@ mod test {
                     .to_c(&crate::test_util::CONFIG)
                     .into_header()
                     .to_string()
-            }).collect();
-        crate::test_util::collection_eq(defs, [
-            "extern \"C\" Result myclass_config(const MyClass* this, Config** out);",
-            "extern \"C\" Result myclass_set_config(MyClass* this, const Config* config);",
-        ]);
+            })
+            .collect();
+        crate::test_util::collection_eq(
+            defs,
+            [
+                "extern \"C\" Result myclass_config(const MyClass* this, Config** out);",
+                "extern \"C\" Result myclass_set_config(MyClass* this, const Config* config);",
+            ],
+        );
     }
 }

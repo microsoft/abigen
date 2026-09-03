@@ -1,5 +1,5 @@
-use std::{fmt::Debug, hash::Hash, collections::{HashSet, HashMap}, sync::LazyLock};
 use crate::{AbiConfig, AbiExceptionConfig};
+use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::LazyLock};
 
 pub const CODE: &'static str = r#"
     class MyClass {
@@ -11,8 +11,8 @@ pub const CODE: &'static str = r#"
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
     exception: AbiExceptionConfig {
-        result_type: "Result".to_string(),
-        throw_map: HashMap::new(),
+        value_type: "Result".to_string(),
+        nullref_value: "Result::ArgumentNull".to_string(),
     },
 });
 

@@ -1,5 +1,8 @@
-use crate::{AbiConfig, query::{FnArg, FnDef, FnArgType, FnRetType}};
-use std::{str::Utf8Error, hash::Hash};
+use crate::{
+    AbiConfig,
+    query::{FnArg, FnArgType, FnDef, FnRetType},
+};
+use std::{hash::Hash, str::Utf8Error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -37,16 +40,23 @@ impl ApiFnDef {
         let mut c = self.clone();
         let class = c.class.clone().unwrap(); // cannot fail, enforced by query
 
-        c.name = format!("{class}_{name}", class = class.to_lowercase(), name = c.name);
+        c.name = format!(
+            "{class}_{name}",
+            class = class.to_lowercase(),
+            name = c.name
+        );
 
-        c.args.insert(0, ApiFnArg {
-            typ: ApiTyperef {
-                typ: class.clone(),
-                is_const: c.immut,
-                relation: RefType::Pointer(1),
+        c.args.insert(
+            0,
+            ApiFnArg {
+                typ: ApiTyperef {
+                    typ: class.clone(),
+                    is_const: c.immut,
+                    relation: RefType::Pointer(1),
+                },
+                name: "this".to_string(),
             },
-            name: "this".to_string(),
-        });
+        );
 
         if &c.ret.typ != "void" {
             c.args.push(ApiFnArg {
@@ -60,7 +70,7 @@ impl ApiFnDef {
         }
 
         c.ret = ApiTyperef {
-            typ: config.exception.result_type.clone(),
+            typ: config.exception.value_type.clone(),
             ..Default::default()
         };
 
@@ -134,12 +144,8 @@ impl From<FnRetType::Match<'_>> for RefType {
 impl RefType {
     pub fn to_c(&self, _config: &AbiConfig) -> Self {
         match self {
-            Self::OwnedReference => {
-                Self::Pointer(2)
-            },
-            Self::Reference => {
-                Self::Pointer(1)
-            },
+            Self::OwnedReference => Self::Pointer(2),
+            Self::Reference => Self::Pointer(1),
             t => t.clone(),
         }
     }
@@ -192,73 +198,75 @@ mod test {
         let ctx = Context::from_buffer(crate::test_util::CODE).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        
+
         let defs: Vec<_> = FnDef::Match::from_node(root)
             .into_iter()
             .map(|q| {
                 ApiFnDef::try_from(q)
                     .expect("Failed to convert")
                     .to_c(&crate::test_util::CONFIG)
-            }).collect();
-        crate::test_util::collection_eq(defs, [
-            ApiFnDef {
-                class: Some("MyClass".to_string()),
-                name: "myclass_config".to_string(),
-                ret: ApiTyperef {
-                    typ: crate::test_util::CONFIG.exception.result_type.clone(),
-                    ..Default::default()
+            })
+            .collect();
+        crate::test_util::collection_eq(
+            defs,
+            [
+                ApiFnDef {
+                    class: Some("MyClass".to_string()),
+                    name: "myclass_config".to_string(),
+                    ret: ApiTyperef {
+                        typ: crate::test_util::CONFIG.exception.value_type.clone(),
+                        ..Default::default()
+                    },
+                    args: vec![
+                        ApiFnArg {
+                            name: "this".to_string(),
+                            typ: ApiTyperef {
+                                typ: "MyClass".to_string(),
+                                is_const: true,
+                                relation: RefType::Pointer(1),
+                            },
+                        },
+                        ApiFnArg {
+                            name: "out".to_string(),
+                            typ: ApiTyperef {
+                                typ: "Config".to_string(),
+                                is_const: false,
+                                relation: RefType::Pointer(2),
+                            },
+                        },
+                    ],
+                    noexcept: true,
+                    immut: true,
                 },
-                args: vec![
-                    ApiFnArg {
-                        name: "this".to_string(),
-                        typ: ApiTyperef {
-                            typ: "MyClass".to_string(),
-                            is_const: true,
-                            relation: RefType::Pointer(1),
-                        }
+                ApiFnDef {
+                    class: Some("MyClass".to_string()),
+                    name: "myclass_set_config".to_string(),
+                    ret: ApiTyperef {
+                        typ: crate::test_util::CONFIG.exception.value_type.clone(),
+                        ..Default::default()
                     },
-                    ApiFnArg {
-                        name: "out".to_string(),
-                        typ: ApiTyperef {
-                            typ: "Config".to_string(),
-                            is_const: false,
-                            relation: RefType::Pointer(2),
+                    args: vec![
+                        ApiFnArg {
+                            name: "this".to_string(),
+                            typ: ApiTyperef {
+                                typ: "MyClass".to_string(),
+                                is_const: false,
+                                relation: RefType::Pointer(1),
+                            },
                         },
-                    },
-                ],
-                noexcept: true,
-                immut: true,
-            },
-            ApiFnDef {
-                class: Some("MyClass".to_string()),
-                name: "myclass_set_config".to_string(),
-                ret: ApiTyperef {
-                    typ: crate::test_util::CONFIG.exception.result_type.clone(),
-                    ..Default::default()
+                        ApiFnArg {
+                            name: "config".to_string(),
+                            typ: ApiTyperef {
+                                typ: "Config".to_string(),
+                                is_const: true,
+                                relation: RefType::Pointer(1),
+                            },
+                        },
+                    ],
+                    immut: false,
+                    noexcept: false,
                 },
-                args: vec![
-                    ApiFnArg {
-                        name: "this".to_string(),
-                        typ: ApiTyperef {
-                            typ: "MyClass".to_string(),
-                            is_const: false,
-                            relation: RefType::Pointer(1),
-                        },
-                    },
-                    ApiFnArg {
-                        name: "config".to_string(),
-                        typ: ApiTyperef {
-                            typ: "Config".to_string(),
-                            is_const: true,
-                            relation: RefType::Pointer(1),
-                        },
-                    },
-                ],
-                immut: false,
-                noexcept: false,
-            }
-        ]);
-
-        
+            ],
+        );
     }
 }

@@ -141,45 +141,46 @@ mod test {
         let ctx = Context::from_buffer(crate::test_util::CODE).expect("Parse error");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnDef::Match::from_node(root), [
-            FnDef::Literal {
-                class: Some("MyClass"),
-                ret: FnRetType::Literal {
-                    q: Some("const"),
-                    t: "Config",
-                    r: vec![FnRetRef::Literal { r: "&" }],
+        crate::test_util::collection_eq(
+            FnDef::Match::from_node(root),
+            [
+                FnDef::Literal {
+                    class: Some("MyClass"),
+                    ret: FnRetType::Literal {
+                        q: Some("const"),
+                        t: "Config",
+                        r: vec![FnRetRef::Literal { r: "&" }],
+                    },
+                    decl: FnDecl::Literal {
+                        name: "config",
+                        args: vec![],
+                        immut: Some("const"),
+                        noexcept: Some("noexcept"),
+                    },
                 },
-                decl: FnDecl::Literal {
-                    name: "config",
-                    args: vec![],
-                    immut: Some("const"),
-                    noexcept: Some("noexcept"),
-                },
-            },
-            FnDef::Literal {
-                class: Some("MyClass"),
-                ret: FnRetType::Literal {
-                    q: None,
-                    t: "void",
-                    r: vec![],
-                },
-                decl: FnDecl::Literal {
-                    name: "set_config",
-                    args: vec![
-                        FnArg::Literal {
+                FnDef::Literal {
+                    class: Some("MyClass"),
+                    ret: FnRetType::Literal {
+                        q: None,
+                        t: "void",
+                        r: vec![],
+                    },
+                    decl: FnDecl::Literal {
+                        name: "set_config",
+                        args: vec![FnArg::Literal {
                             name: "config",
                             typ: FnArgType::Literal {
                                 q: Some("const"),
                                 t: "Config",
-                                r: vec![FnArgRef::Literal { r: "&" }]
-                            }
-                        }
-                    ],
-                    immut: None,
-                    noexcept: None,
+                                r: vec![FnArgRef::Literal { r: "&" }],
+                            },
+                        }],
+                        immut: None,
+                        noexcept: None,
+                    },
                 },
-            },
-        ]);
+            ],
+        );
     }
 
     #[test]
@@ -277,10 +278,7 @@ mod test {
         let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
-            r: vec![
-                FnArgRef::Literal { r: "*" },
-                FnArgRef::Literal { r: "*" },
-            ],
+            r: vec![FnArgRef::Literal { r: "*" }, FnArgRef::Literal { r: "*" }],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");

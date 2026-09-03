@@ -34,7 +34,9 @@ fn main() {
         max_code: args.code,
         max_depth: args.depth,
         show_anon: args.anon,
-    }.set().expect("Failed to set formatting config");
+    }
+    .set()
+    .expect("Failed to set formatting config");
 
     if let Some(ref qtext) = args.query {
         let q =

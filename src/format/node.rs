@@ -1,5 +1,9 @@
 use crate::{ContextCursor, ContextNode};
-use std::{collections::HashMap, fmt::{Debug, Display}, sync::{LazyLock, RwLock, RwLockWriteGuard}};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    sync::{LazyLock, RwLock, RwLockWriteGuard},
+};
 
 const INDENT: &str = "  ";
 static STRIP_MAP: LazyLock<HashMap<char, char>> =
@@ -13,7 +17,8 @@ fn sanitize(item: char) -> char {
     }
 }
 
-static FMT_DISPLAY_CONFIG: RwLock<NodeDisplayConfig> = RwLock::new(NodeDisplayConfig::const_default());
+static FMT_DISPLAY_CONFIG: RwLock<NodeDisplayConfig> =
+    RwLock::new(NodeDisplayConfig::const_default());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeDisplayConfig {
@@ -50,8 +55,14 @@ impl Display for ContextNode<'_> {
     }
 }
 
-pub fn print_tree<'t>(f: &mut std::fmt::Formatter, mut cursor: ContextCursor<'t>) -> Result<ContextCursor<'t>, std::fmt::Error> {
-    let config = FMT_DISPLAY_CONFIG.read().map_err(|_| std::fmt::Error)?.clone();
+pub fn print_tree<'t>(
+    f: &mut std::fmt::Formatter,
+    mut cursor: ContextCursor<'t>,
+) -> Result<ContextCursor<'t>, std::fmt::Error> {
+    let config = FMT_DISPLAY_CONFIG
+        .read()
+        .map_err(|_| std::fmt::Error)?
+        .clone();
 
     if !config.show_anon && !cursor.cursor.node().is_named() {
         return Ok(cursor);
@@ -70,7 +81,9 @@ pub fn print_tree<'t>(f: &mut std::fmt::Formatter, mut cursor: ContextCursor<'t>
         },
     )?;
 
-    if cursor.cursor.depth() as usize == config.max_depth - 1 && cursor.node().node.named_child_count() > 0 {
+    if cursor.cursor.depth() as usize == config.max_depth - 1
+        && cursor.node().node.named_child_count() > 0
+    {
         for _ in 0..config.max_depth {
             write!(f, "{INDENT}")?;
         }
@@ -93,7 +106,10 @@ pub struct NodeFormat<'a> {
 
 impl Display for NodeFormat<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let config = FMT_DISPLAY_CONFIG.read().map_err(|_| std::fmt::Error)?.clone();
+        let config = FMT_DISPLAY_CONFIG
+            .read()
+            .map_err(|_| std::fmt::Error)?
+            .clone();
 
         let body: String = self
             .node
