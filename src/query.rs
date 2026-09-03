@@ -201,7 +201,7 @@ pub(crate) use {field_t, field_val, structured_query, test_eq, test_t};
 
 #[cfg(test)]
 pub mod test {
-    use crate::{Context, print_node};
+    use crate::Context;
     use std::{collections::HashSet, fmt::Debug, hash::Hash};
 
     pub fn collection_eq<A, E>(
@@ -258,7 +258,7 @@ pub mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 10, 50, true);
+        println!("{root}");
 
         collection_eq(Q::Match::from_node(root), expected);
     }
@@ -275,7 +275,7 @@ pub mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 10, 50, true);
+        println!("{root}");
 
         collection_eq(Q::Match::from_node(root), expected);
     }

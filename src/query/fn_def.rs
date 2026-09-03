@@ -95,7 +95,7 @@ structured_query! {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Context, print_node};
+    use crate::Context;
 
     #[test]
     fn def() {
@@ -157,8 +157,7 @@ mod test {
 
         let ctx = Context::from_buffer(header).expect("Parse error");
         let root = ctx.root();
-        print_node(root, 10, 50, true);
-
+        println!("{root}");
         crate::query::test::collection_eq(FnDef::Match::from_node(root), expected);
     }
 
@@ -187,8 +186,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Parse error");
         let root = ctx.root();
-        print_node(root, 10, 50, true);
-
+        println!("{root}");
         crate::query::test::collection_eq(FnArg::Match::from_node(root), expected);
     }
 
@@ -203,7 +201,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -218,7 +216,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -233,7 +231,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -248,7 +246,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -266,7 +264,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -285,7 +283,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 
@@ -303,7 +301,7 @@ mod test {
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
-        print_node(root, 15, 50, true);
+        println!("{root}");
         super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
     }
 }

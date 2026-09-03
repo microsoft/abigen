@@ -6,6 +6,8 @@ pub struct ApiFnDef {
     pub ret: ApiTyperef,
     pub name: String,
     pub args: Vec<ApiFnArg>,
+    pub noexcept: bool,
+    pub immut: bool,
 }
 
 impl TryFrom<FnDef::Match<'_>> for ApiFnDef {
@@ -21,6 +23,8 @@ impl TryFrom<FnDef::Match<'_>> for ApiFnDef {
             ret: value.ret.try_into()?,
             name: value.decl.name.as_str()?.to_string(),
             args,
+            noexcept: value.decl.noexcept.is_some(),
+            immut: value.decl.immut.is_some(),
         })
     }
 }

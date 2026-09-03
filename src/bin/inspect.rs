@@ -1,4 +1,4 @@
-use abigen::{self, Context};
+use abigen::{self, Context, NodeDisplayConfig};
 use clap::Parser;
 use std::path::PathBuf;
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
@@ -15,20 +15,26 @@ struct Args {
 
     /// The number of descendant AST node layers to print
     #[arg(short = 'd', long, default_value_t = 5)]
-    depth: u32,
+    depth: usize,
 
     /// The amount of AST node code to print
     #[arg(short, long, default_value_t = 50)]
     code: usize,
 
     /// Show anonymous nodes
-    #[arg(long)]
+    #[arg(long, default_value_t = false)]
     anon: bool,
 }
 
 fn main() {
     let args = Args::parse();
     let ctx = Context::from_file(&args.header).expect("Failed to load file");
+
+    NodeDisplayConfig {
+        max_code: args.code,
+        max_depth: args.depth,
+        show_anon: args.anon,
+    }.set().expect("Failed to set formatting config");
 
     if let Some(ref qtext) = args.query {
         let q =
@@ -38,10 +44,9 @@ fn main() {
         let mut qm = qc.matches(&q, node.node, ctx.text());
         while let Some(m) = qm.next() {
             let node = ctx.wrap(m.nodes_for_capture_index(0).next().unwrap());
-            abigen::print_node(node, args.depth, args.code, args.anon);
-            println!();
+            println!("{node}");
         }
     } else {
-        abigen::print_node(ctx.root(), args.depth, args.code, args.anon);
+        println!("{}", ctx.root());
     }
 }
