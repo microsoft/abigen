@@ -3,20 +3,60 @@ use crate::query::structured_query;
 structured_query! {
     name: pub FnDef,
     fields: {
-        ret: Typeref,
+        class: Option,
+        ret: FnRetType,
         decl: FnDecl,
     },
     query: r#"
-        (field_declaration_list
-            ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
-            .
-            (field_declaration)*
-            .
-            (field_declaration
-                declarator: (_) @decl
-            ) @ret
+        (class_specifier
+            name: (type_identifier) @class
+            body: (field_declaration_list
+                ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
+                .
+                (field_declaration)*
+                .
+                (field_declaration
+                    declarator: (_) @decl
+                ) @ret
+            )
         )
     "#
+}
+
+structured_query! {
+    name: pub FnRetType,
+    fields: {
+        q: Option,
+        t: _,
+        r: [FnRetRef],
+    },
+    query: r#"
+        (field_declaration
+            (type_qualifier ("const") @q)?
+            type: [(primitive_type) (type_identifier) (qualified_identifier)] @t
+        ) @r
+    "#
+}
+
+structured_query! {
+    name: pub FnRetRef,
+    fields: {
+        r: _,
+    },
+    query: r#"
+        (_
+            declarator: [
+                (reference_declarator
+                    [("&") ("&&")] @r
+                    [(function_declarator)]
+                )
+                (pointer_declarator
+                    ("*") @r
+                    declarator: [(function_declarator) (pointer_declarator)]
+                )
+            ]
+        )
+    "#,
 }
 
 structured_query! {
@@ -40,7 +80,7 @@ structured_query! {
 structured_query! {
     name: pub FnArg,
     fields: {
-        typ: Typeref,
+        typ: FnArgType,
         name: _,
     },
     query: r#"
@@ -56,39 +96,38 @@ structured_query! {
 }
 
 structured_query! {
-    name: pub Typeref,
+    name: pub FnArgType,
     fields: {
         q: Option,
         t: _,
-        r: [Ref],
+        r: [FnArgRef],
     },
     query: r#"
         (_
             (type_qualifier ("const"))? @q
             type: [(primitive_type) (type_identifier) (qualified_identifier)] @t
-            declarator: (_) @r
-        )
+        ) @r
     "#,
 }
 
 structured_query! {
-    name: pub Ref,
+    name: pub FnArgRef,
     fields: {
         r: _,
-        q: Option,
     },
     query: r#"
-        [
-            (reference_declarator
-                [("&") ("&&")] @r
-                (identifier)
-            )
-            (pointer_declarator
-                ("*") @r
-                (type_qualifier ("const"))? @q
-                declarator: [(pointer_declarator) (identifier)]
-            )
-        ]
+        (_
+            declarator: [
+                (reference_declarator
+                    [("&") ("&&")] @r
+                    (identifier)
+                )
+                (pointer_declarator
+                    ("*") @r
+                    declarator: [(pointer_declarator) (identifier)]
+                )
+            ]
+        )
     "#,
 }
 
@@ -99,66 +138,48 @@ mod test {
 
     #[test]
     fn def() {
-        let header = r#"
-            class MyClass {
-            public:
-                int my_field;
-                const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg) const noexcept;
-                void second_method();
-            private:
-                void internal_method();
-            };
-        "#;
-        let expected = [
+        let ctx = Context::from_buffer(crate::test_util::CODE).expect("Parse error");
+        let root = ctx.root();
+        println!("{root}");
+        crate::test_util::collection_eq(FnDef::Match::from_node(root), [
             FnDef::Literal {
-                ret: Typeref::Literal {
+                class: Some("MyClass"),
+                ret: FnRetType::Literal {
                     q: Some("const"),
-                    t: "Session",
-                    r: vec![Ref::Literal { r: "&", q: None }],
+                    t: "Config",
+                    r: vec![FnRetRef::Literal { r: "&" }],
                 },
                 decl: FnDecl::Literal {
-                    name: "my_method",
-                    args: vec![
-                        FnArg::Literal {
-                            typ: Typeref::Literal {
-                                q: None,
-                                t: "int",
-                                r: vec![],
-                            },
-                            name: "simple_arg",
-                        },
-                        FnArg::Literal {
-                            typ: Typeref::Literal {
-                                q: Some("const"),
-                                t: "std::unique_ptr<Class>",
-                                r: vec![Ref::Literal { r: "&", q: None }],
-                            },
-                            name: "complex_arg",
-                        },
-                    ],
+                    name: "config",
+                    args: vec![],
                     immut: Some("const"),
                     noexcept: Some("noexcept"),
                 },
             },
             FnDef::Literal {
-                ret: Typeref::Literal {
+                class: Some("MyClass"),
+                ret: FnRetType::Literal {
                     q: None,
                     t: "void",
                     r: vec![],
                 },
                 decl: FnDecl::Literal {
-                    name: "second_method",
-                    args: vec![],
+                    name: "set_config",
+                    args: vec![
+                        FnArg::Literal {
+                            name: "config",
+                            typ: FnArgType::Literal {
+                                q: Some("const"),
+                                t: "Config",
+                                r: vec![FnArgRef::Literal { r: "&" }]
+                            }
+                        }
+                    ],
                     immut: None,
                     noexcept: None,
                 },
             },
-        ];
-
-        let ctx = Context::from_buffer(header).expect("Parse error");
-        let root = ctx.root();
-        println!("{root}");
-        crate::query::test::collection_eq(FnDef::Match::from_node(root), expected);
+        ]);
     }
 
     #[test]
@@ -167,7 +188,7 @@ mod test {
             "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";
         let expected = [
             FnArg::Literal {
-                typ: Typeref::Literal {
+                typ: FnArgType::Literal {
                     q: None,
                     t: "int",
                     r: vec![],
@@ -175,10 +196,10 @@ mod test {
                 name: "simple_arg",
             },
             FnArg::Literal {
-                typ: Typeref::Literal {
+                typ: FnArgType::Literal {
                     q: Some("const"),
                     t: "std::unique_ptr<Class>",
-                    r: vec![Ref::Literal { r: "&", q: None }],
+                    r: vec![FnArgRef::Literal { r: "&" }],
                 },
                 name: "complex_arg",
             },
@@ -187,13 +208,13 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Parse error");
         let root = ctx.root();
         println!("{root}");
-        crate::query::test::collection_eq(FnArg::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArg::Match::from_node(root), expected);
     }
 
     #[test]
     fn simple() {
         let code = "int x = 0;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "int",
             r: vec![],
@@ -202,106 +223,88 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
     fn ref1() {
         let code = "Session& x = y;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
-            r: vec![Ref::Literal { r: "&", q: None }],
+            r: vec![FnArgRef::Literal { r: "&" }],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
     fn ref2() {
         let code = "Session&& x = y;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
-            r: vec![Ref::Literal { r: "&&", q: None }],
+            r: vec![FnArgRef::Literal { r: "&&" }],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
     fn ptr1() {
         let code = "Session* x = y;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
-            r: vec![Ref::Literal { r: "*", q: None }],
+            r: vec![FnArgRef::Literal { r: "*" }],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
     fn ptr2() {
         let code = "Session** x = y;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
             r: vec![
-                Ref::Literal { r: "*", q: None },
-                Ref::Literal { r: "*", q: None },
+                FnArgRef::Literal { r: "*" },
+                FnArgRef::Literal { r: "*" },
             ],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
     fn ptr3() {
         let code = "Session*** x = y;";
-        let expected = [Typeref::Literal {
+        let expected = [FnArgType::Literal {
             q: None,
             t: "Session",
             r: vec![
-                Ref::Literal { r: "*", q: None },
-                Ref::Literal { r: "*", q: None },
-                Ref::Literal { r: "*", q: None },
+                FnArgRef::Literal { r: "*" },
+                FnArgRef::Literal { r: "*" },
+                FnArgRef::Literal { r: "*" },
             ],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
-    }
-
-    #[test]
-    fn ptr_const() {
-        let code = "Session* const x = y;";
-        let expected = [Typeref::Literal {
-            q: None,
-            t: "Session",
-            r: vec![Ref::Literal {
-                r: "*",
-                q: Some("const"),
-            }],
-        }];
-
-        let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
-        let root = ctx.root();
-        println!("{root}");
-        super::super::test::collection_eq(Typeref::Match::from_node(root), expected);
+        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 }

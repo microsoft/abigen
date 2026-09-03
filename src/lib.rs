@@ -7,7 +7,13 @@ pub use context::*;
 mod api;
 pub use api::*;
 
+mod config;
+pub use config::*;
+
 mod query;
+
+#[cfg(test)]
+pub(crate) mod test_util;
 
 use std::sync::LazyLock;
 use tree_sitter::Language;

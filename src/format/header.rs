@@ -1,11 +1,26 @@
 use std::fmt::Display;
-
+use std::borrow::Cow;
 use crate::{ApiFnArg, ApiFnDef, ApiTyperef, RefType};
 
-pub struct FnDefHeader<'a>(&'a ApiFnDef);
+impl ApiFnDef {
+    pub fn header(&self) -> FnDefHeader<'_> {
+        FnDefHeader::from(self)
+    }
+
+    pub fn into_header(self) -> FnDefHeader<'static> {
+        FnDefHeader::from(self)
+    }
+}
+
+pub struct FnDefHeader<'a>(Cow<'a, ApiFnDef>);
 impl<'a> From<&'a ApiFnDef> for FnDefHeader<'a> {
     fn from(value: &'a ApiFnDef) -> Self {
-        Self(value)
+        Self(Cow::Borrowed(value))
+    }
+}
+impl<'a> From<ApiFnDef> for FnDefHeader<'a> {
+    fn from(value: ApiFnDef) -> Self {
+        Self(Cow::Owned(value))
     }
 }
 impl Display for FnDefHeader<'_> {
@@ -15,23 +30,14 @@ impl Display for FnDefHeader<'_> {
             name = self.0.name,
         )?;
 
-        if self.0.args.len() > 0 {
-            write!(f, "{}", FnArgHeader::from(&self.0.args[0]))?;
-        }
-        for a in &self.0.args[1..] {
-            write!(f, ", {}", FnArgHeader::from(a))?;
-        }
-
-        write!(f, ")")?;
-
-        if self.0.immut {
-            write!(f, " const")?;
-        }
-        if self.0.noexcept {
-            write!(f, " noexcept")?;
+        for (i, arg) in self.0.args.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", FnArgHeader::from(arg))?;
         }
 
-        write!(f, ";")?;
+        write!(f, ");")?;
         Ok(())
     }
 }
@@ -68,24 +74,44 @@ impl Display for TyperefHeader<'_> {
 
         match self.0.relation {
             RefType::OwnedReference => {
-                write!(f, "&& ")?;
+                write!(f, "&&")?;
             },
             RefType::Reference => {
-                write!(f, "& ")?;
+                write!(f, "&")?;
             },
-            RefType::Value => {
-                write!(f, " ")?;
-            },
-            RefType::Pointer { depth, is_const } => {
+            RefType::Value => {},
+            RefType::Pointer(depth) => {
                 for _ in 0..depth {
                     write!(f, "*")?;
-                }
-                if is_const {
-                    write!(f, " const")?;
                 }
             },
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{Context, query::FnDef};
+
+    #[test]
+    fn print() {
+        let ctx = Context::from_buffer(crate::test_util::CODE).expect("Failed to parse snippet");
+        let root = ctx.root();
+        let defs: Vec<_> = FnDef::Match::from_node(root)
+            .into_iter()
+            .map(|q| {
+                ApiFnDef::try_from(q)
+                    .expect("Failed to convert")
+                    .to_c(&crate::test_util::CONFIG)
+                    .into_header()
+                    .to_string()
+            }).collect();
+        crate::test_util::collection_eq(defs, [
+            "extern \"C\" Result myclass_config(const MyClass* this, Config** out);",
+            "extern \"C\" Result myclass_set_config(MyClass* this, const Config* config);",
+        ]);
     }
 }

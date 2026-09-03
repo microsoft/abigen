@@ -58,22 +58,23 @@ pub fn print_tree<'t>(f: &mut std::fmt::Formatter, mut cursor: ContextCursor<'t>
     }
 
     for _ in 0..cursor.cursor.depth() {
-        print!("{INDENT}");
+        write!(f, "{INDENT}")?;
     }
 
-    println!(
+    writeln!(
+        f,
         "{}",
         NodeFormat {
             node: cursor.node(),
             field: cursor.cursor.field_name(),
         },
-    );
+    )?;
 
     if cursor.cursor.depth() as usize == config.max_depth - 1 && cursor.node().node.named_child_count() > 0 {
         for _ in 0..config.max_depth {
-            print!("{INDENT}");
+            write!(f, "{INDENT}")?;
         }
-        println!("+{} children", cursor.node().node.named_child_count());
+        writeln!(f, "+{} children", cursor.node().node.named_child_count())?;
     } else if cursor.cursor.goto_first_child() {
         cursor = print_tree(f, cursor)?;
         while cursor.cursor.goto_next_sibling() {

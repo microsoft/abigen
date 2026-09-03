@@ -202,28 +202,7 @@ pub(crate) use {field_t, field_val, structured_query, test_eq, test_t};
 #[cfg(test)]
 pub mod test {
     use crate::Context;
-    use std::{collections::HashSet, fmt::Debug, hash::Hash};
-
-    pub fn collection_eq<A, E>(
-        actual: impl IntoIterator<Item = A>,
-        expected: impl IntoIterator<Item = E>,
-    ) where
-        A: Debug,
-        E: Debug + PartialEq + Eq + Hash + PartialEq<A>,
-    {
-        let mut expected: HashSet<_> = expected.into_iter().collect();
-
-        let mut unexpected = vec![];
-        for item in actual {
-            let expected = expected.extract_if(|i| i == &item).next();
-            if expected.is_none() {
-                unexpected.push(item);
-            }
-        }
-        let unmatched: Vec<_> = expected.into_iter().collect();
-
-        assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
-    }
+    use std::fmt::Debug;
 
     structured_query! {
         name: pub Q,
@@ -260,7 +239,7 @@ pub mod test {
         let root = ctx.root();
         println!("{root}");
 
-        collection_eq(Q::Match::from_node(root), expected);
+        crate::test_util::collection_eq(Q::Match::from_node(root), expected);
     }
 
     #[test]
@@ -277,6 +256,6 @@ pub mod test {
         let root = ctx.root();
         println!("{root}");
 
-        collection_eq(Q::Match::from_node(root), expected);
+        crate::test_util::collection_eq(Q::Match::from_node(root), expected);
     }
 }
