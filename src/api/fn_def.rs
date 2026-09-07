@@ -194,79 +194,42 @@ mod test {
     use crate::Context;
 
     #[test]
-    fn to_c() {
-        let ctx = Context::from_buffer(crate::test_util::CODE).expect("Failed to parse snippet");
+    fn config() {
+        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
 
-        let defs: Vec<_> = FnDef::Match::from_node(root)
+        let item = FnDef::Match::from_node(root)
             .into_iter()
+            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "config"))
             .map(|q| {
                 ApiFnDef::try_from(q)
                     .expect("Failed to convert")
-                    .to_c(&crate::test_util::CONFIG)
-            })
-            .collect();
-        crate::test_util::collection_eq(
-            defs,
-            [
-                ApiFnDef {
-                    class: Some("MyClass".to_string()),
-                    name: "myclass_config".to_string(),
-                    ret: ApiTyperef {
-                        typ: crate::test_util::CONFIG.exception.value_type.clone(),
-                        ..Default::default()
-                    },
-                    args: vec![
-                        ApiFnArg {
-                            name: "this".to_string(),
-                            typ: ApiTyperef {
-                                typ: "MyClass".to_string(),
-                                is_const: true,
-                                relation: RefType::Pointer(1),
-                            },
-                        },
-                        ApiFnArg {
-                            name: "out".to_string(),
-                            typ: ApiTyperef {
-                                typ: "Config".to_string(),
-                                is_const: false,
-                                relation: RefType::Pointer(2),
-                            },
-                        },
-                    ],
-                    noexcept: true,
-                    immut: true,
-                },
-                ApiFnDef {
-                    class: Some("MyClass".to_string()),
-                    name: "myclass_set_config".to_string(),
-                    ret: ApiTyperef {
-                        typ: crate::test_util::CONFIG.exception.value_type.clone(),
-                        ..Default::default()
-                    },
-                    args: vec![
-                        ApiFnArg {
-                            name: "this".to_string(),
-                            typ: ApiTyperef {
-                                typ: "MyClass".to_string(),
-                                is_const: false,
-                                relation: RefType::Pointer(1),
-                            },
-                        },
-                        ApiFnArg {
-                            name: "config".to_string(),
-                            typ: ApiTyperef {
-                                typ: "Config".to_string(),
-                                is_const: true,
-                                relation: RefType::Pointer(1),
-                            },
-                        },
-                    ],
-                    immut: false,
-                    noexcept: false,
-                },
-            ],
+                    .to_c(&crate::test::CONFIG)
+            });
+        assert_eq!(
+            crate::test::PROCESSED.get("config").expect("Expected config not found"),
+            &item.expect("Actual config not found"),
+        );
+    }
+
+    #[test]
+    fn set_config() {
+        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
+        let root = ctx.root();
+        println!("{root}");
+
+        let item = FnDef::Match::from_node(root)
+            .into_iter()
+            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "set_config"))
+            .map(|q| {
+                ApiFnDef::try_from(q)
+                    .expect("Failed to convert")
+                    .to_c(&crate::test::CONFIG)
+            });
+        assert_eq!(
+            crate::test::PROCESSED.get("set_config").expect("Expected config not found"),
+            &item.expect("Actual config not found"),
         );
     }
 }

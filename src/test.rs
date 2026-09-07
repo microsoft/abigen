@@ -1,13 +1,12 @@
 use crate::{AbiConfig, AbiExceptionConfig};
 use std::{collections::HashSet, fmt::Debug, hash::Hash, sync::LazyLock};
 
-pub const CODE: &'static str = r#"
-    class MyClass {
-    public:
-        const Config& config() const noexcept;
-        void set_config(const Config& config);
-    };
-"#;
+pub const CODE: &'static str = include_str!("test/input.h");
+
+mod parsed;
+pub use parsed::*;
+mod processed;
+pub use processed::*;
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
     exception: AbiExceptionConfig {

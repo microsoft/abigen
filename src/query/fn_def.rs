@@ -137,49 +137,32 @@ mod test {
     use crate::Context;
 
     #[test]
-    fn def() {
-        let ctx = Context::from_buffer(crate::test_util::CODE).expect("Parse error");
+    fn config() {
+        let ctx = Context::from_buffer(crate::test::CODE).expect("Parse error");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(
-            FnDef::Match::from_node(root),
-            [
-                FnDef::Literal {
-                    class: Some("MyClass"),
-                    ret: FnRetType::Literal {
-                        q: Some("const"),
-                        t: "Config",
-                        r: vec![FnRetRef::Literal { r: "&" }],
-                    },
-                    decl: FnDecl::Literal {
-                        name: "config",
-                        args: vec![],
-                        immut: Some("const"),
-                        noexcept: Some("noexcept"),
-                    },
-                },
-                FnDef::Literal {
-                    class: Some("MyClass"),
-                    ret: FnRetType::Literal {
-                        q: None,
-                        t: "void",
-                        r: vec![],
-                    },
-                    decl: FnDecl::Literal {
-                        name: "set_config",
-                        args: vec![FnArg::Literal {
-                            name: "config",
-                            typ: FnArgType::Literal {
-                                q: Some("const"),
-                                t: "Config",
-                                r: vec![FnArgRef::Literal { r: "&" }],
-                            },
-                        }],
-                        immut: None,
-                        noexcept: None,
-                    },
-                },
-            ],
+
+        let items = FnDef::Match::from_node(root);
+        let item = items.iter()
+            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "config"));
+        assert_eq!(
+            crate::test::PARSED.get("config").expect("Expected config not found"),
+            item.expect("Actual config not found"),
+        );
+    }
+
+    #[test]
+    fn set_config() {
+        let ctx = Context::from_buffer(crate::test::CODE).expect("Parse error");
+        let root = ctx.root();
+        println!("{root}");
+
+        let items = FnDef::Match::from_node(root);
+        let item = items.iter()
+            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "set_config"));
+        assert_eq!(
+            crate::test::PARSED.get("set_config").expect("Expected set_config not found"),
+            item.expect("Actual set_config not found"),
         );
     }
 
@@ -209,7 +192,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Parse error");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArg::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArg::Match::from_node(root), expected);
     }
 
     #[test]
@@ -224,7 +207,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
@@ -239,7 +222,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
@@ -254,7 +237,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
@@ -269,7 +252,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
@@ -284,7 +267,7 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 
     #[test]
@@ -303,6 +286,6 @@ mod test {
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
         let root = ctx.root();
         println!("{root}");
-        crate::test_util::collection_eq(FnArgType::Match::from_node(root), expected);
+        crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
     }
 }

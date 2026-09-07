@@ -194,6 +194,14 @@ macro_rules! structured_query {
                 ].into_iter().all(|v| v)
             }
         }
+
+        impl<'tree> PartialEq<Match<'tree>> for &Literal<'tree> {
+            fn eq(&self, other: &Match<'tree>) -> bool {
+                [
+                    $( $crate::query::test_eq!(self, other, $field, $field_t) ),+
+                ].into_iter().all(|v| v)
+            }
+        }
     }
 };
 }
@@ -239,7 +247,7 @@ pub mod test {
         let root = ctx.root();
         println!("{root}");
 
-        crate::test_util::collection_eq(Q::Match::from_node(root), expected);
+        crate::test::collection_eq(Q::Match::from_node(root), expected);
     }
 
     #[test]
@@ -256,6 +264,6 @@ pub mod test {
         let root = ctx.root();
         println!("{root}");
 
-        crate::test_util::collection_eq(Q::Match::from_node(root), expected);
+        crate::test::collection_eq(Q::Match::from_node(root), expected);
     }
 }

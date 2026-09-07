@@ -157,19 +157,19 @@ mod test {
 
     #[test]
     fn header() {
-        let ctx = Context::from_buffer(crate::test_util::CODE).expect("Failed to parse snippet");
+        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
         let root = ctx.root();
         let defs: Vec<_> = FnDef::Match::from_node(root)
             .into_iter()
             .map(|q| {
                 ApiFnDef::try_from(q)
                     .expect("Failed to convert")
-                    .to_c(&crate::test_util::CONFIG)
+                    .to_c(&crate::test::CONFIG)
                     .header()
                     .to_string()
             })
             .collect();
-        crate::test_util::collection_eq(
+        crate::test::collection_eq(
             defs,
             [
                 "#ifdef __cplusplus extern \"C\" #endif Result myclass_config(const MyClass* this, Config** out);",

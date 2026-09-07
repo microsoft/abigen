@@ -13,7 +13,7 @@ pub use config::*;
 mod query;
 
 #[cfg(test)]
-pub(crate) mod test_util;
+pub(crate) mod test;
 
 use std::sync::LazyLock;
 use tree_sitter::Language;
