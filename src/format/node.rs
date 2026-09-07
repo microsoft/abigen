@@ -111,21 +111,14 @@ impl Display for NodeFormat<'_> {
             .map_err(|_| std::fmt::Error)?
             .clone();
 
-        let body: String = self
-            .node
-            .as_str()
-            .map_err(|_| std::fmt::Error)?
-            .chars()
-            .map(sanitize)
-            .collect();
-        let body = if body.len() > config.max_code {
-            format!(
-                "\"{}...\" +{} chars",
-                &body[0..config.max_code],
-                body.len() - config.max_code,
-            )
+        let body = self.node.as_str().map_err(|_| std::fmt::Error)?;
+        let rest = body.chars().skip(config.max_code).count();
+        let body: String = body.chars().take(config.max_code).map(sanitize).collect();
+
+        let body = if rest > 0 {
+            format!("\"{body}...\" +{rest} chars")
         } else {
-            format!("\"{}\"", body)
+            format!("\"{body}\"")
         };
 
         match self.field {
