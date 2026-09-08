@@ -75,7 +75,7 @@ impl std::hash::Hash for Context {
 }
 
 impl Context {
-    pub fn from_file(path: &Path) -> Result<Self, ContextError> {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ContextError> {
         let buf = fs::read(path)?;
         Self::from_buffer(buf)
     }
@@ -123,7 +123,7 @@ impl<'t> ContextNode<'t> {
         }
     }
 
-    pub fn as_str(&self) -> Result<&str, std::str::Utf8Error> {
+    pub fn as_str(&self) -> Result<&'t str, std::str::Utf8Error> {
         self.node.utf8_text(self.context.text())
     }
 }

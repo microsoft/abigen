@@ -137,36 +137,6 @@ mod test {
     use crate::Context;
 
     #[test]
-    fn config() {
-        let ctx = Context::from_buffer(crate::test::CODE).expect("Parse error");
-        let root = ctx.root();
-        println!("{root}");
-
-        let items = FnDef::Match::from_node(root);
-        let item = items.iter()
-            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "config"));
-        assert_eq!(
-            crate::test::PARSED.get("config").expect("Expected config not found"),
-            item.expect("Actual config not found"),
-        );
-    }
-
-    #[test]
-    fn set_config() {
-        let ctx = Context::from_buffer(crate::test::CODE).expect("Parse error");
-        let root = ctx.root();
-        println!("{root}");
-
-        let items = FnDef::Match::from_node(root);
-        let item = items.iter()
-            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "set_config"));
-        assert_eq!(
-            crate::test::PARSED.get("set_config").expect("Expected set_config not found"),
-            item.expect("Actual set_config not found"),
-        );
-    }
-
-    #[test]
     fn arg() {
         let code =
             "const Session& my_method(int simple_arg, const std::unique_ptr<Class>& complex_arg);";

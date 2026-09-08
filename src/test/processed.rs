@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 use crate::{ApiFnDef, ApiFnArg, ApiTyperef, RefType};
 
-pub static PROCESSED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
+pub static PROCESSED_EXPECTED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
     HashMap::from_iter([
         ("config", ApiFnDef {
             class: Some("MyClass".to_string()),
@@ -12,7 +12,7 @@ pub static PROCESSED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(
             },
             args: vec![
                 ApiFnArg {
-                    name: "this".to_string(),
+                    name: "self".to_string(),
                     typ: ApiTyperef {
                         typ: "MyClass".to_string(),
                         is_const: true,
@@ -40,7 +40,7 @@ pub static PROCESSED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(
             },
             args: vec![
                 ApiFnArg {
-                    name: "this".to_string(),
+                    name: "self".to_string(),
                     typ: ApiTyperef {
                         typ: "MyClass".to_string(),
                         is_const: false,

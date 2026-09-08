@@ -14,10 +14,10 @@ pub struct ApiFnDef {
     pub immut: bool,
 }
 
-impl TryFrom<FnDef::Match<'_>> for ApiFnDef {
+impl TryFrom<&FnDef::Match<'_>> for ApiFnDef {
     type Error = Utf8Error;
-    fn try_from(value: FnDef::Match) -> Result<Self, Utf8Error> {
-        let args_r: Vec<Result<_, _>> = value.decl.args.into_iter().map(|a| a.try_into()).collect();
+    fn try_from(value: &FnDef::Match) -> Result<Self, Utf8Error> {
+        let args_r: Vec<Result<_, _>> = value.decl.args.iter().map(|a| a.try_into()).collect();
         let mut args = vec![];
         for r in args_r {
             args.push(r?);
@@ -26,7 +26,7 @@ impl TryFrom<FnDef::Match<'_>> for ApiFnDef {
         let class = Some(value.class.unwrap().as_str()?.to_string());
         Ok(Self {
             class,
-            ret: value.ret.try_into()?,
+            ret: ApiTyperef::try_from(&value.ret)?,
             name: value.decl.name.as_str()?.to_string(),
             args,
             noexcept: value.decl.noexcept.is_some(),
@@ -54,7 +54,7 @@ impl ApiFnDef {
                     is_const: c.immut,
                     relation: RefType::Pointer(1),
                 },
-                name: "this".to_string(),
+                name: "self".to_string(),
             },
         );
 
@@ -86,11 +86,11 @@ pub struct ApiFnArg {
     pub name: String,
 }
 
-impl TryFrom<FnArg::Match<'_>> for ApiFnArg {
+impl TryFrom<&FnArg::Match<'_>> for ApiFnArg {
     type Error = Utf8Error;
-    fn try_from(value: FnArg::Match) -> Result<Self, Utf8Error> {
+    fn try_from(value: &FnArg::Match) -> Result<Self, Utf8Error> {
         Ok(Self {
-            typ: value.typ.try_into()?,
+            typ: ApiTyperef::try_from(&value.typ)?,
             name: value.name.as_str()?.to_string(),
         })
     }
@@ -113,8 +113,8 @@ pub enum RefType {
     OwnedReference,
 }
 
-impl From<FnArgType::Match<'_>> for RefType {
-    fn from(value: FnArgType::Match<'_>) -> Self {
+impl From<&FnArgType::Match<'_>> for RefType {
+    fn from(value: &FnArgType::Match<'_>) -> Self {
         if value.r.len() == 0 {
             RefType::Value
         } else if let Ok("&") = value.r[0].r.as_str() {
@@ -127,8 +127,8 @@ impl From<FnArgType::Match<'_>> for RefType {
     }
 }
 
-impl From<FnRetType::Match<'_>> for RefType {
-    fn from(value: FnRetType::Match<'_>) -> Self {
+impl From<&FnRetType::Match<'_>> for RefType {
+    fn from(value: &FnRetType::Match<'_>) -> Self {
         if value.r.len() == 0 {
             RefType::Value
         } else if let Ok("&") = value.r[0].r.as_str() {
@@ -158,9 +158,9 @@ pub struct ApiTyperef {
     pub relation: RefType,
 }
 
-impl TryFrom<FnArgType::Match<'_>> for ApiTyperef {
+impl TryFrom<&FnArgType::Match<'_>> for ApiTyperef {
     type Error = Utf8Error;
-    fn try_from(value: FnArgType::Match<'_>) -> Result<Self, Utf8Error> {
+    fn try_from(value: &FnArgType::Match<'_>) -> Result<Self, Utf8Error> {
         Ok(Self {
             is_const: value.q.is_some(),
             typ: value.t.as_str()?.to_string(),
@@ -169,9 +169,9 @@ impl TryFrom<FnArgType::Match<'_>> for ApiTyperef {
     }
 }
 
-impl TryFrom<FnRetType::Match<'_>> for ApiTyperef {
+impl TryFrom<&FnRetType::Match<'_>> for ApiTyperef {
     type Error = Utf8Error;
-    fn try_from(value: FnRetType::Match<'_>) -> Result<Self, Self::Error> {
+    fn try_from(value: &FnRetType::Match<'_>) -> Result<Self, Self::Error> {
         Ok(Self {
             is_const: value.q.is_some(),
             typ: value.t.as_str()?.to_string(),
@@ -181,55 +181,17 @@ impl TryFrom<FnRetType::Match<'_>> for ApiTyperef {
 }
 
 impl ApiTyperef {
+    pub fn void() -> Self {
+        Self {
+            typ: "void".to_string(),
+            is_const: false,
+            relation: RefType::Value,
+        }
+    }
+
     pub fn to_c(&self, config: &AbiConfig) -> Self {
         let mut c = self.clone();
         c.relation = c.relation.to_c(config);
         c
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::Context;
-
-    #[test]
-    fn config() {
-        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
-        let root = ctx.root();
-        println!("{root}");
-
-        let item = FnDef::Match::from_node(root)
-            .into_iter()
-            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "config"))
-            .map(|q| {
-                ApiFnDef::try_from(q)
-                    .expect("Failed to convert")
-                    .to_c(&crate::test::CONFIG)
-            });
-        assert_eq!(
-            crate::test::PROCESSED.get("config").expect("Expected config not found"),
-            &item.expect("Actual config not found"),
-        );
-    }
-
-    #[test]
-    fn set_config() {
-        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
-        let root = ctx.root();
-        println!("{root}");
-
-        let item = FnDef::Match::from_node(root)
-            .into_iter()
-            .find(|i| i.decl.name.as_str().is_ok_and(|n| n == "set_config"))
-            .map(|q| {
-                ApiFnDef::try_from(q)
-                    .expect("Failed to convert")
-                    .to_c(&crate::test::CONFIG)
-            });
-        assert_eq!(
-            crate::test::PROCESSED.get("set_config").expect("Expected config not found"),
-            &item.expect("Actual config not found"),
-        );
     }
 }

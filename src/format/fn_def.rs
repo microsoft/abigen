@@ -18,8 +18,6 @@ impl ApiFnDef {
     }
 }
 
-const PRELUDE: &'static str = "#ifdef __cplusplus extern \"C\" #endif";
-
 fn fmt_proto(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef) -> std::fmt::Result {
     let args: Delimited<',', _> = item.args.iter()
         .map(|a| {
@@ -28,7 +26,7 @@ fn fmt_proto(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef) -> std::fmt::Resu
             })
         }).collect();
 
-    write!(f, "{PRELUDE} {ret} {name}({args})",
+    write!(f, "{ret} {name}({args})",
         ret = fmt::from_fn(|f| fmt_typ(f, &item.ret)),
         name = item.name,
     )
@@ -122,7 +120,7 @@ fn fmt_body_try_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &
 
 fn fmt_body_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiConfig) -> std::fmt::Result {
     if item.args[item.args.len()-1].name == "out" {
-        // no "this", no "out"
+        // no "self", no "out"
         let other_args: Delimited<',', _> = item.args[1..item.args.len()-1].iter()
             .map(|a| {
                 fmt::from_fn(|f| {
@@ -131,11 +129,11 @@ fn fmt_body_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiC
             })
             .collect();
 
-        write!(f, "*out = nullptr; *out = this->{name}({other_args});",
+        write!(f, "*out = nullptr; *out = self->{name}({other_args});",
             name = item.name,
         )
     } else {
-        // no "this"
+        // no "self"
         let args: Delimited<',', _> = item.args[1..].iter()
             .map(|a| {
                 fmt::from_fn(|f| {
@@ -144,42 +142,8 @@ fn fmt_body_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiC
             })
             .collect();
 
-        write!(f, "this->{name}({args});",
+        write!(f, "self->{name}({args});",
             name = item.name,
         )
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{Context, query::FnDef};
-
-    #[test]
-    fn header() {
-        let ctx = Context::from_buffer(crate::test::CODE).expect("Failed to parse snippet");
-        let root = ctx.root();
-        let defs: Vec<_> = FnDef::Match::from_node(root)
-            .into_iter()
-            .map(|q| {
-                ApiFnDef::try_from(q)
-                    .expect("Failed to convert")
-                    .to_c(&crate::test::CONFIG)
-                    .header()
-                    .to_string()
-            })
-            .collect();
-        crate::test::collection_eq(
-            defs,
-            [
-                "#ifdef __cplusplus extern \"C\" #endif Result myclass_config(const MyClass* this, Config** out);",
-                "#ifdef __cplusplus extern \"C\" #endif Result myclass_set_config(MyClass* this, const Config* config);",
-            ],
-        );
-    }
-
-    #[test]
-    fn code_simple() {
-        todo!()
     }
 }

@@ -16,7 +16,7 @@ impl ApiHeader {
 
         let ctx = Context::from_file(file)?;
         for m in FnDef::Match::from_node(ctx.root()) {
-            s.functions.push(m.try_into()?);
+            s.functions.push(ApiFnDef::try_from(&m)?);
         }
 
         Ok(s)

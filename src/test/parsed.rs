@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock};
 use crate::query::*;
 
-pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::new(|| {
+pub static PARSED_EXPECTED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::new(|| {
     HashMap::from_iter([
         ("config", FnDef::Literal {
             class: Some("MyClass"),
