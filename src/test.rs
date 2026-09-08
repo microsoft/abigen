@@ -127,42 +127,55 @@ pub fn collection_eq<A, E>(
     assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
 }
 
-#[test]
-fn config_parsed() {
-    assert_eq!(
-        PARSED_EXPECTED.get("config").expect("No expected config"),
-        PARSED_ACTUAL.get("config").expect("No actual config"),
-    );
-}
+macro_rules! gen_test(
+    ($name:ident) => {
+        #[cfg(test)]
+        mod $name {
+            #[allow(unused)]
+            use super::*;
 
-#[test]
-fn config_interpreted() {
-    assert_eq!(
-        INTERPRETED_EXPECTED.get("config").expect("No expected config"),
-        INTERPRETED_ACTUAL.get("config").expect("No actual config"),
-    );
-}
+            #[test]
+            fn parsed() {
+                assert_eq!(
+                    PARSED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
+                    PARSED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
 
-#[test]
-fn config_processed() {
-    assert_eq!(
-        PROCESSED_EXPECTED.get("config").expect("No expected config"),
-        PROCESSED_ACTUAL.get("config").expect("No actual config"),
-    );
-}
+            #[test]
+            fn interpreted() {
+                assert_eq!(
+                    INTERPRETED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
+                    INTERPRETED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
 
-#[test]
-fn config_h() {
-    assert_eq!(
-        H_EXPECTED.get("myclass_config").expect("No expected config"),
-        H_ACTUAL.get("config").expect("No actual config"),
-    );
-}
+            #[test]
+            fn processed() {
+                assert_eq!(
+                    PROCESSED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
+                    PROCESSED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
 
-#[test]
-fn config_c() {
-    assert_eq!(
-        CPP_EXPECTED.get("myclass_config").expect("No expected config"),
-        CPP_ACTUAL.get("config").expect("No actual config"),
-    );
-}
+            #[test]
+            fn h() {
+                assert_eq!(
+                    H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+                    H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
+
+            #[test]
+            fn cpp() {
+                assert_eq!(
+                    CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+                    CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
+        }
+    };
+);
+
+gen_test!(config);
+gen_test!(set_config);
