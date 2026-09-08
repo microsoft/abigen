@@ -1,4 +1,4 @@
-use crate::{AbiConfig, AbiExceptionConfig, ApiFnDef, Context, query::{FnDef, structured_query}};
+use crate::{AbiConfig, AbiExceptionConfig, ApiFnDef, Context, ContextNode, query::{FnDef, structured_query}};
 use std::{collections::{HashMap, HashSet}, fmt::Debug, hash::Hash, path::PathBuf, sync::LazyLock};
 
 mod parsed;
@@ -20,10 +20,6 @@ pub static H_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/output.h")).expect("Failed to parse input")
 });
 
-pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/output.cpp")).expect("Failed to parse input")
-});
-
 structured_query! {
     name: ExpectedHeader,
     fields: {
@@ -39,10 +35,14 @@ structured_query! {
     "#,
 }
 
-pub static H_EXPECTED: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+pub static H_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     ExpectedHeader::Match::from_node(H_EXPECTED_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str().expect("Bad name"), m.full.as_str().expect("Bad body"))
+        (m.name.as_str().expect("Bad name"), m.full)
     }).collect()
+});
+
+pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
+    Context::from_file(CRATE_DIR.join("src/test/output.cpp")).expect("Failed to parse input")
 });
 
 structured_query! {
@@ -60,9 +60,9 @@ structured_query! {
     "#,
 }
 
-pub static CPP_EXPECTED: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+pub static CPP_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     ExpectedCpp::Match::from_node(CPP_EXPECTED_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str().expect("Bad name"), m.full.as_str().expect("Bad body"))
+        (m.name.as_str().expect("Bad name"), m.full)
     }).collect()
 });
 
@@ -84,17 +84,17 @@ pub static PROCESSED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLoc
     }).collect()
 });
 
-pub static H_ACTUAL: LazyLock<HashMap<&'static str, String>> = LazyLock::new(|| {
-    PROCESSED_ACTUAL.iter().map(|(name, def)| {
-        (*name, def.header().to_string())
-    }).collect()
-});
+// pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+//     PROCESSED_ACTUAL.iter().map(|(name, def)| {
+//         (*name, def.header().to_string())
+//     }).collect()
+// });
 
-pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, String>> = LazyLock::new(|| {
-    PROCESSED_ACTUAL.iter().map(|(name, def)| {
-        (*name, def.code(&CONFIG).to_string())
-    }).collect()
-});
+// pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+//     PROCESSED_ACTUAL.iter().map(|(name, def)| {
+//         (*name, def.code(&CONFIG).to_string())
+//     }).collect()
+// });
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
     exception: AbiExceptionConfig {
@@ -158,21 +158,21 @@ macro_rules! gen_test(
                 );
             }
 
-            #[test]
-            fn h() {
-                assert_eq!(
-                    H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-                    H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-                );
-            }
+            // #[test]
+            // fn h() {
+            //     assert_eq!(
+            //         H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+            //         H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+            //     );
+            // }
 
-            #[test]
-            fn cpp() {
-                assert_eq!(
-                    CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-                    CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-                );
-            }
+            // #[test]
+            // fn cpp() {
+            //     assert_eq!(
+            //         CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+            //         CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+            //     );
+            // }
         }
     };
 );

@@ -4,6 +4,9 @@ use tree_sitter::QueryError;
 mod fn_def;
 pub(crate) use fn_def::*;
 
+mod template;
+pub(crate) use template::*;
+
 #[derive(Debug)]
 pub enum StructuredQueryError {
     Compile(QueryError),
@@ -32,6 +35,9 @@ macro_rules! field_t (
     (Option) => {
         Option<$crate::ContextNode<'tree>>
     };
+    ([_]) => {
+        Vec<$crate::ContextNode<'tree>>
+    };
     ([$($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Match<'tree>>
     };
@@ -46,6 +52,9 @@ macro_rules! field_val (
     };
     ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
         Some($m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n)))
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, [_]) => {
+        Some($m.nodes_for_capture_index($query.$f).map(|n| $ctx.wrap(n)).collect::<Vec<$crate::ContextNode<'tree>>>())
     };
     ($query:expr, $ctx:ident, $m:ident, $f:ident, [$($sub_q:ident)::+]) => {
         Some($m.nodes_for_capture_index($query.$f).map(|n| {
@@ -68,6 +77,9 @@ macro_rules! test_t (
     (Option) => {
         Option<&'tree str>
     };
+    ([_]) => {
+        Vec<&'tree str>
+    };
     ([$($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Literal<'tree>>
     };
@@ -86,6 +98,9 @@ macro_rules! test_eq (
             (None, None) => true,
             _ => false,
         })
+    };
+    ($self:ident, $other:ident, $f:ident, [_]) => {
+        $other.$f.iter().zip($self.$f.iter()).all(|(o, s)| o.as_str().is_ok_and(|f| f == *s))
     };
     ($self:ident, $other:ident, $f:ident, [$($sub_q:ident)::+]) => {
         $self.$f.len() == $other.$f.len()

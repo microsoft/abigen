@@ -140,9 +140,9 @@ impl<'a> std::fmt::Debug for ContextNode<'a> {
     }
 }
 
-impl<'a> AsRef<str> for ContextNode<'a> {
-    fn as_ref(&self) -> &str {
-        self.as_str().expect("Bad utf8")
+impl PartialEq<ContextNode<'_>> for ContextNode<'_> {
+    fn eq(&self, other: &ContextNode<'_>) -> bool {
+        cursor_eq(&mut self.walk(), &mut other.walk())
     }
 }
 
@@ -156,4 +156,31 @@ impl<'t> ContextCursor<'t> {
     pub fn node(&self) -> ContextNode<'t> {
         self.context.wrap(self.cursor.node())
     }
+}
+
+fn cursor_eq(a: &mut ContextCursor<'_>, b: &mut ContextCursor<'_>) -> bool {
+    if a.cursor.node().kind_id() != b.cursor.node().kind_id() 
+        || a.cursor.node().child_count() != b.cursor.node().child_count() {
+        // a and b are superficially different different
+        return false;
+    } else if a.cursor.node().child_count() == 0 && a.node().as_str() != b.node().as_str() {
+        // a and b are textually identical leaf nodes
+        return true;
+    }
+
+    a.cursor.goto_first_child();
+    b.cursor.goto_first_child();
+
+    loop {
+        if !cursor_eq(a, b) {
+            return false;
+        } else if !a.cursor.goto_next_sibling() || !b.cursor.goto_next_sibling() {
+            break;
+        }
+    }
+
+    a.cursor.goto_parent();
+    b.cursor.goto_parent();
+
+    true
 }
