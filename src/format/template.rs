@@ -23,7 +23,7 @@ impl Template {
 
     pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, Error> {
         let ctx = Context::from_buffer(buf)?;
-        let template = str::from_utf8(ctx.text())?;
+        let template = ctx.as_str();
 
         let markers = crate::query::Template::Match::from_node(ctx.root());
         let markers = if markers.len() == 1 {
@@ -70,7 +70,7 @@ mod test {
 
     #[test]
     fn header() {
-        let t = Template::from_buffer(crate::test::TEMPLATE_H_CTX.text())
+        let t = Template::from_buffer(crate::test::TEMPLATE_H_CTX.as_str())
             .expect("Failed to load template header");
 
         assert_eq!(t.header.len(), 237);

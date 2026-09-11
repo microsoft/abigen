@@ -2,7 +2,7 @@ use crate::{
     AbiConfig,
     query::{FnArg, FnArgType, FnDef, FnRetType},
 };
-use std::{hash::Hash, str::Utf8Error};
+use std::hash::Hash;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -14,24 +14,23 @@ pub struct ApiFnDef {
     pub immut: bool,
 }
 
-impl TryFrom<&FnDef::Match<'_>> for ApiFnDef {
-    type Error = Utf8Error;
-    fn try_from(value: &FnDef::Match) -> Result<Self, Utf8Error> {
-        let args_r: Vec<Result<_, _>> = value.decl.args.iter().map(|a| a.try_into()).collect();
+impl From<&FnDef::Match<'_>> for ApiFnDef {
+    fn from(value: &FnDef::Match) -> Self {
+        let args_r: Vec<_> = value.decl.args.iter().map(|a| a.into()).collect();
         let mut args = vec![];
         for r in args_r {
-            args.push(r?);
+            args.push(r);
         }
 
-        let class = Some(value.class.unwrap().as_str()?.to_string());
-        Ok(Self {
+        let class = Some(value.class.as_ref().unwrap().as_str().to_string());
+        Self {
             class,
-            ret: ApiTyperef::try_from(&value.ret)?,
-            name: value.decl.name.as_str()?.to_string(),
+            ret: ApiTyperef::from(&value.ret),
+            name: value.decl.name.as_str().to_string(),
             args,
             noexcept: value.decl.noexcept.is_some(),
             immut: value.decl.immut.is_some(),
-        })
+        }
     }
 }
 
@@ -86,13 +85,12 @@ pub struct ApiFnArg {
     pub name: String,
 }
 
-impl TryFrom<&FnArg::Match<'_>> for ApiFnArg {
-    type Error = Utf8Error;
-    fn try_from(value: &FnArg::Match) -> Result<Self, Utf8Error> {
-        Ok(Self {
-            typ: ApiTyperef::try_from(&value.typ)?,
-            name: value.name.as_str()?.to_string(),
-        })
+impl From<&FnArg::Match<'_>> for ApiFnArg {
+    fn from(value: &FnArg::Match) -> Self {
+        Self {
+            typ: ApiTyperef::from(&value.typ),
+            name: value.name.as_str().to_string(),
+        }
     }
 }
 
@@ -117,9 +115,9 @@ impl From<&FnArgType::Match<'_>> for RefType {
     fn from(value: &FnArgType::Match<'_>) -> Self {
         if value.r.len() == 0 {
             RefType::Value
-        } else if let Ok("&") = value.r[0].r.as_str() {
+        } else if value.r[0].r.as_str() == "&" {
             RefType::Reference
-        } else if let Ok("&&") = value.r[0].r.as_str() {
+        } else if value.r[0].r.as_str() == "&&" {
             RefType::OwnedReference
         } else {
             RefType::Pointer(value.r.len())
@@ -131,9 +129,9 @@ impl From<&FnRetType::Match<'_>> for RefType {
     fn from(value: &FnRetType::Match<'_>) -> Self {
         if value.r.len() == 0 {
             RefType::Value
-        } else if let Ok("&") = value.r[0].r.as_str() {
+        } else if value.r[0].r.as_str() == "&" {
             RefType::Reference
-        } else if let Ok("&&") = value.r[0].r.as_str() {
+        } else if value.r[0].r.as_str() == "&&" {
             RefType::OwnedReference
         } else {
             RefType::Pointer(value.r.len())
@@ -158,25 +156,23 @@ pub struct ApiTyperef {
     pub relation: RefType,
 }
 
-impl TryFrom<&FnArgType::Match<'_>> for ApiTyperef {
-    type Error = Utf8Error;
-    fn try_from(value: &FnArgType::Match<'_>) -> Result<Self, Utf8Error> {
-        Ok(Self {
+impl From<&FnArgType::Match<'_>> for ApiTyperef {
+    fn from(value: &FnArgType::Match<'_>) -> Self {
+        Self {
             is_const: value.q.is_some(),
-            typ: value.t.as_str()?.to_string(),
+            typ: value.t.as_str().to_string(),
             relation: RefType::from(value),
-        })
+        }
     }
 }
 
-impl TryFrom<&FnRetType::Match<'_>> for ApiTyperef {
-    type Error = Utf8Error;
-    fn try_from(value: &FnRetType::Match<'_>) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<&FnRetType::Match<'_>> for ApiTyperef {
+    fn from(value: &FnRetType::Match<'_>) -> Self {
+        Self {
             is_const: value.q.is_some(),
-            typ: value.t.as_str()?.to_string(),
+            typ: value.t.as_str().to_string(),
             relation: RefType::from(value),
-        })
+        }
     }
 }
 

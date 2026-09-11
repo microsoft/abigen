@@ -17,6 +17,7 @@ extern "C" {
 #endif
 
 Result myclass_config(const MyClass* self, Config** out);
+Result myclass_set_config(MyClass* self, const Config* config);
 
 #ifdef __cplusplus
 } // extern C

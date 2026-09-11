@@ -90,11 +90,11 @@ macro_rules! test_t (
 
 macro_rules! test_eq (
     ($self:ident, $other:ident, $f:ident, _) => {
-        $other.$f.as_str().is_ok_and(|f| f == $self.$f)
+        $other.$f.as_str() == $self.$f
     };
     ($self:ident, $other:ident, $f:ident, Option) => {
         (match ($self.$f, $other.$f) {
-            (Some(s), Some(o)) => o.as_str().is_ok_and(|f| f == s),
+            (Some(s), Some(o)) => o.as_str() == s,
             (None, None) => true,
             _ => false,
         })
@@ -158,7 +158,7 @@ macro_rules! structured_query {
                 use ::tree_sitter::StreamingIterator;
 
                 let mut cursor = ::tree_sitter::QueryCursor::new();
-                let mut matches = cursor.matches(&QUERY_INST.query, node.node, node.context.text());
+                let mut matches = cursor.matches(&QUERY_INST.query, node.node, node.context.as_str().as_bytes());
                 let mut ret = vec![];
 
                 while let Some(m) = matches.next() {

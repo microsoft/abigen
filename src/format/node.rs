@@ -111,7 +111,7 @@ impl Display for NodeFormat<'_> {
             .map_err(|_| std::fmt::Error)?
             .clone();
 
-        let body = self.node.as_str().map_err(|_| std::fmt::Error)?;
+        let body = self.node.as_str();
         let rest = body.chars().skip(config.max_code).count();
         let body: String = body.chars().take(config.max_code).map(sanitize).collect();
 

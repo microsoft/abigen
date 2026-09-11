@@ -1,8 +1,5 @@
 use std::{
-    fs,
-    path::Path,
-    str,
-    sync::{LazyLock, RwLock},
+    borrow::Cow, fs, path::Path, str, sync::{LazyLock, RwLock},
 };
 
 use tree_sitter::{Node, Parser, Tree, TreeCursor};
@@ -18,7 +15,7 @@ static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    text: Vec<u8>,
+    text: String,
     tree: Tree,
 }
 
@@ -35,13 +32,16 @@ impl Context {
     }
 
     pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, Error> {
-        let buf = buf.into();
+        let buf = String::from_utf8(buf.into())?;
 
         let mut p = PARSER.write()?;
         let tree = p.parse(&buf, None).unwrap(); // cannot fail
         p.reset();
 
-        Ok(Self { text: buf, tree })
+        Ok(Self {
+            text: buf,
+            tree,
+        })
     }
 
     pub fn root<'t>(&'t self) -> ContextNode<'t> {
@@ -51,8 +51,8 @@ impl Context {
         }
     }
 
-    pub fn text<'t>(&'t self) -> &'t [u8] {
-        &self.text as &[u8]
+    pub fn as_str(&self) -> &str {
+        self.text.as_str()
     }
 
     pub fn wrap<'t>(&'t self, node: Node<'t>) -> ContextNode<'t> {
@@ -60,6 +60,31 @@ impl Context {
             node,
             context: self,
         }
+    }
+}
+
+impl From<String> for Context {
+    fn from(value: String) -> Self {
+        let mut p = PARSER.write().expect("Parser poisoned!");
+        let tree = p.parse(&value, None).unwrap(); // cannot fail
+        p.reset();
+
+        Self {
+            text: value,
+            tree,
+        }
+    }
+}
+
+impl AsRef<str> for Context {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -77,8 +102,8 @@ impl<'t> ContextNode<'t> {
         }
     }
 
-    pub fn as_str(&self) -> Result<&'t str, std::str::Utf8Error> {
-        self.node.utf8_text(self.context.text())
+    pub fn as_str(&self) -> &'t str {
+        &self.context.as_str()[self.node.start_byte()..self.node.end_byte()]
     }
 }
 
@@ -88,9 +113,15 @@ impl<'t> Into<Node<'t>> for ContextNode<'t> {
     }
 }
 
+impl<'t> AsRef<str> for ContextNode<'t> {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl<'a> std::fmt::Debug for ContextNode<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.as_str().map_err(|_| std::fmt::Error)?.escape_debug())
+        write!(f, "\"{}\"", self.as_str().escape_debug())
     }
 }
 

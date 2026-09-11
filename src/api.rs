@@ -21,7 +21,7 @@ impl ApiHeader {
 
         let ctx = Context::from_buffer(header)?;
         for m in FnDef::Match::from_node(ctx.root()) {
-            s.functions.push(ApiFnDef::try_from(&m)?);
+            s.functions.push(ApiFnDef::from(&m));
         }
 
         Ok(s)

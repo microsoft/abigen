@@ -43,7 +43,7 @@ fn main() {
             Query::new(&tree_sitter_cpp::LANGUAGE.into(), qtext).expect("Failed to compile query");
         let mut qc = QueryCursor::new();
         let node = ctx.root();
-        let mut qm = qc.matches(&q, node.node, ctx.text());
+        let mut qm = qc.matches(&q, node.node, ctx.as_str().as_bytes());
         while let Some(m) = qm.next() {
             let node = ctx.wrap(m.nodes_for_capture_index(0).next().unwrap());
             println!("{node}");
