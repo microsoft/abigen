@@ -10,6 +10,9 @@ pub use api::*;
 mod config;
 pub use config::*;
 
+mod error;
+pub use error::*;
+
 mod query;
 
 #[cfg(test)]

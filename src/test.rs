@@ -16,6 +16,10 @@ pub static INPUT_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/input.h")).expect("Failed to parse input")
 });
 
+pub static TEMPLATE_H_CTX: LazyLock<Context> = LazyLock::new(|| {
+    Context::from_file(CRATE_DIR.join("src/test/template.h")).expect("Failed to parse template header")
+});
+
 pub static H_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/output.h")).expect("Failed to parse input")
 });
@@ -84,17 +88,19 @@ pub static PROCESSED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLoc
     }).collect()
 });
 
-// pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-//     PROCESSED_ACTUAL.iter().map(|(name, def)| {
-//         (*name, def.header().to_string())
-//     }).collect()
-// });
+pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+    // PROCESSED_ACTUAL.iter().map(|(name, def)| {
+    //     (*name, def.header().to_string())
+    // }).collect()
+    todo!()
+});
 
-// pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-//     PROCESSED_ACTUAL.iter().map(|(name, def)| {
-//         (*name, def.code(&CONFIG).to_string())
-//     }).collect()
-// });
+pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+    // PROCESSED_ACTUAL.iter().map(|(name, def)| {
+    //     (*name, def.code(&CONFIG).to_string())
+    // }).collect()
+    todo!()
+});
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
     exception: AbiExceptionConfig {
@@ -158,21 +164,21 @@ macro_rules! gen_test(
                 );
             }
 
-            // #[test]
-            // fn h() {
-            //     assert_eq!(
-            //         H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-            //         H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-            //     );
-            // }
+            #[test]
+            fn h() {
+                assert_eq!(
+                    H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+                    H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
 
-            // #[test]
-            // fn cpp() {
-            //     assert_eq!(
-            //         CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-            //         CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-            //     );
-            // }
+            #[test]
+            fn cpp() {
+                assert_eq!(
+                    CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
+                    CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                );
+            }
         }
     };
 );

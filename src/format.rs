@@ -1,6 +1,9 @@
 mod node;
 pub use node::*;
 
+mod template;
+pub use template::*;
+
 mod fn_def;
 
 use std::fmt::Display;

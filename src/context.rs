@@ -1,14 +1,13 @@
 use std::{
-    fmt::Display,
-    fs, io,
+    fs,
     path::Path,
     str,
-    sync::{LazyLock, PoisonError, RwLock, RwLockWriteGuard},
+    sync::{LazyLock, RwLock},
 };
 
-use tree_sitter::{LanguageError, Node, Parser, Tree, TreeCursor};
+use tree_sitter::{Node, Parser, Tree, TreeCursor};
 
-use crate::LANG;
+use crate::{Error, LANG};
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
@@ -16,51 +15,6 @@ static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
         .expect("Failed to set parser language");
     RwLock::new(p)
 });
-
-#[derive(Debug)]
-pub enum ContextError {
-    Language(LanguageError),
-    Io(io::Error),
-    Utf8(str::Utf8Error),
-    Poison(PoisonError<RwLockWriteGuard<'static, Parser>>),
-}
-impl From<LanguageError> for ContextError {
-    fn from(value: LanguageError) -> Self {
-        Self::Language(value)
-    }
-}
-impl From<io::Error> for ContextError {
-    fn from(value: io::Error) -> Self {
-        Self::Io(value)
-    }
-}
-impl From<str::Utf8Error> for ContextError {
-    fn from(value: str::Utf8Error) -> Self {
-        Self::Utf8(value)
-    }
-}
-impl From<PoisonError<RwLockWriteGuard<'static, Parser>>> for ContextError {
-    fn from(value: PoisonError<RwLockWriteGuard<'static, Parser>>) -> Self {
-        Self::Poison(value)
-    }
-}
-impl Into<std::fmt::Error> for ContextError {
-    fn into(self) -> std::fmt::Error {
-        std::fmt::Error
-    }
-}
-
-impl Display for ContextError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Language(e) => write!(f, "{e}"),
-            Self::Io(e) => write!(f, "{e}"),
-            Self::Utf8(e) => write!(f, "{e}"),
-            Self::Poison(e) => write!(f, "{e}"),
-        }
-    }
-}
-impl std::error::Error for ContextError {}
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -75,12 +29,12 @@ impl std::hash::Hash for Context {
 }
 
 impl Context {
-    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ContextError> {
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
         let buf = fs::read(path)?;
         Self::from_buffer(buf)
     }
 
-    pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, ContextError> {
+    pub fn from_buffer(buf: impl Into<Vec<u8>>) -> Result<Self, Error> {
         let buf = buf.into();
 
         let mut p = PARSER.write()?;
@@ -136,7 +90,7 @@ impl<'t> Into<Node<'t>> for ContextNode<'t> {
 
 impl<'a> std::fmt::Debug for ContextNode<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.as_str().map_err(|_| std::fmt::Error)?)
+        write!(f, "\"{}\"", self.as_str().map_err(|_| std::fmt::Error)?.escape_debug())
     }
 }
 

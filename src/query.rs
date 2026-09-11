@@ -189,7 +189,7 @@ macro_rules! structured_query {
 
         impl std::fmt::Debug for Match<'_> {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}::Match {{ ", stringify!($name))?;
+                write!(f, "Match {{ ")?;
                 $( write!(f, "{}: {:?}, ", stringify!($field), self.$field)?; )+
                 write!(f, "}}")?;
                 Ok(())
