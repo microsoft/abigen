@@ -1,16 +1,16 @@
-use std::path::Path;
+use std::{fmt::{self, Display}, path::Path};
 
-use crate::{Context, Error, query::FnDef};
+use crate::{AbiConfig, Context, Error, query::FnDef};
 
 mod fn_def;
 pub use fn_def::*;
 
 #[derive(Debug, Clone, Default)]
-pub struct ApiHeader {
+pub struct Api {
     pub functions: Vec<ApiFnDef>,
 }
 
-impl ApiHeader {
+impl Api {
     pub fn from_file(header_file: impl AsRef<Path>) -> Result<Self, Error> {
         let header = std::fs::read(header_file)?;
         Self::from_buffer(header)
@@ -25,5 +25,29 @@ impl ApiHeader {
         }
 
         Ok(s)
+    }
+
+    pub fn to_c(self, config: &AbiConfig) -> Self {
+        Self {
+            functions: self.functions.into_iter().map(|f| f.to_c(config)).collect()
+        }
+    }
+
+    pub fn header(&self) -> impl Display {
+        fmt::from_fn(|f| {
+            for func in &self.functions {
+                writeln!(f, "{}", func.header())?;
+            }
+            Ok(())
+        })
+    }
+
+    pub fn code(&self, config: &AbiConfig) -> impl Display {
+        fmt::from_fn(|f| {
+            for func in &self.functions {
+                writeln!(f, "{}", func.code(config))?;
+            }
+            Ok(())
+        })
     }
 }

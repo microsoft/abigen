@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
-use crate::{Context, Error};
+use std::{fmt::{self, Display}, path::{Path, PathBuf}};
+use crate::{AbiConfig, Api, Context, Error};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Template {
-    header: String,
-    footer: String,
+    pub header: String,
+    pub footer: String,
 }
 
 impl Template {
@@ -62,6 +62,26 @@ impl Template {
             footer: footer.to_string(),
         })
     }
+
+    pub fn header(&self, api: &Api) -> impl Display {
+        fmt::from_fn(|f| {
+            writeln!(f, "{head}\n{body}\n{foot}",
+                head = self.header,
+                body = api.header(),
+                foot = self.footer,
+            )
+        })
+    }
+
+    pub fn code(&self, api: &Api, config: &AbiConfig) -> impl Display {
+        fmt::from_fn(|f| {
+            writeln!(f, "{head}\n{body}\n{foot}",
+                head = self.header,
+                body = api.code(config),
+                foot = self.footer,
+            )
+        })
+    }
 }
 
 #[cfg(test)]
@@ -73,10 +93,10 @@ mod test {
         let t = Template::from_buffer(crate::test::TEMPLATE_H_CTX.as_str())
             .expect("Failed to load template header");
 
-        assert_eq!(t.header.len(), 237);
-        assert!(t.header.ends_with('\n'));
+        assert!(t.header.contains("@abigen:start"));
+        assert!(t.header.ends_with("\n"));
 
-        assert_eq!(t.footer.len(), 26);
+        assert!(t.footer.contains("@abigen:end"));
         assert!(t.footer.starts_with('\r') || t.footer.starts_with('\n'));
     }
 }

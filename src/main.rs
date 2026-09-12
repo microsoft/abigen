@@ -1,4 +1,4 @@
-use abigen::ApiHeader;
+use abigen::Api;
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -9,5 +9,5 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    let _api = ApiHeader::from_file(&args.header).expect("Failed to load header");
+    let _api = Api::from_file(&args.header).expect("Failed to load header");
 }

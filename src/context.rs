@@ -51,15 +51,19 @@ impl Context {
         }
     }
 
-    pub fn as_str(&self) -> &str {
-        self.text.as_str()
-    }
-
     pub fn wrap<'t>(&'t self, node: Node<'t>) -> ContextNode<'t> {
         ContextNode {
             node,
             context: self,
         }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.text.as_str()
+    }
+
+    pub fn into_string(self) -> String {
+        self.text
     }
 }
 

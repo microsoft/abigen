@@ -1,18 +1,18 @@
-use crate::{AbiConfig, ApiFnArg, ApiFnDef, ApiTyperef, Context, Delimited, RefType};
-use std::fmt;
+use crate::{AbiConfig, ApiFnArg, ApiFnDef, ApiTyperef, Delimited, RefType};
+use std::fmt::{self, Display};
 
 impl ApiFnDef {
-    pub fn header(&self) -> Context {
-        let text = format!("{}", fmt::from_fn(|f| fmt_proto(f, self)));
-        Context::from(text)
+    pub fn header(&self) -> impl Display {
+        fmt::from_fn(|f| fmt_proto(f, self))
     }
 
-    pub fn code(&self, config: &AbiConfig) -> Context {
-        let text = format!("{proto}\n{body}",
-            proto = fmt::from_fn(|f| fmt_proto(f, self)),
-            body = fmt::from_fn(|f| fmt_body(f, self, config)),
-        );
-        Context::from(text)
+    pub fn code(&self, config: &AbiConfig) -> impl Display {
+        fmt::from_fn(|f| {
+            write!(f, "{proto}\n{body}",
+                proto = fmt::from_fn(|f| fmt_proto(f, self)),
+                body = fmt::from_fn(|f| fmt_body(f, self, config)),
+            )
+        })
     }
 }
 

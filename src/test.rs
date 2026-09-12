@@ -1,4 +1,4 @@
-use crate::{AbiConfig, AbiExceptionConfig, ApiFnDef, Context, ContextNode, query::{FnDef, structured_query}};
+use crate::{AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template, query::{FnDef, structured_query}};
 use std::{collections::{HashMap, HashSet}, fmt::Debug, hash::Hash, path::PathBuf, sync::LazyLock};
 
 mod expected_parsed;
@@ -12,6 +12,16 @@ pub static CRATE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 });
 
+pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
+    exception: AbiExceptionConfig {
+        value_type: "Result".to_string(),
+        success_value: "Result::Success".to_string(),
+        nullref_value: "Result::ArgumentNull".to_string(),
+        generic_value: "Result::Unknown".to_string(),
+        custom_values: std::collections::HashMap::new(),
+    },
+});
+
 pub static INPUT_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/input.h")).expect("Failed to parse input")
 });
@@ -20,12 +30,50 @@ pub static TEMPLATE_H_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/input_template.h")).expect("Failed to parse template header")
 });
 
+pub static TEMPLATE_H: LazyLock<Template> = LazyLock::new(|| {
+    Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template header")
+});
+
+pub static TEMPLATE_CPP_CTX: LazyLock<Context> = LazyLock::new(|| {
+    Context::from_file(CRATE_DIR.join("src/test/input_template.cpp")).expect("Failed to parse template impl")
+});
+
+pub static TEMPLATE_CPP: LazyLock<Template> = LazyLock::new(|| {
+    Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template impl")
+});
+
 pub static H_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
     Context::from_file(CRATE_DIR.join("src/test/expected.h")).expect("Failed to parse input")
 });
 
+pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
+    Context::from_file(CRATE_DIR.join("src/test/expected.cpp")).expect("Failed to parse input")
+});
+
+pub static H_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
+    let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
+    Context::from(format!("{}", api.to_c(&CONFIG).header()))
+});
+
+pub static CPP_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
+    let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
+    Context::from(format!("{}", api.to_c(&CONFIG).code(&CONFIG)))
+});
+
+pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+    HeaderDecl::Match::from_node(H_ACTUAL_CTX.root()).into_iter().map(|m| {
+        (m.name.as_str(), m.full)
+    }).collect()
+});
+
+pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+    CodeDef::Match::from_node(CPP_ACTUAL_CTX.root()).into_iter().map(|m| {
+        (m.name.as_str(), m.full)
+    }).collect()
+});
+
 structured_query! {
-    name: ExpectedHeader,
+    name: HeaderDecl,
     fields: {
         name: _,
         full: _,
@@ -40,17 +88,13 @@ structured_query! {
 }
 
 pub static H_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    ExpectedHeader::Match::from_node(H_EXPECTED_CTX.root()).into_iter().map(|m| {
+    HeaderDecl::Match::from_node(H_EXPECTED_CTX.root()).into_iter().map(|m| {
         (m.name.as_str(), m.full)
     }).collect()
 });
 
-pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/output.cpp")).expect("Failed to parse input")
-});
-
 structured_query! {
-    name: ExpectedCpp,
+    name: CodeDef,
     fields: {
         name: _,
         full: _,
@@ -65,7 +109,7 @@ structured_query! {
 }
 
 pub static CPP_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    ExpectedCpp::Match::from_node(CPP_EXPECTED_CTX.root()).into_iter().map(|m| {
+    CodeDef::Match::from_node(CPP_EXPECTED_CTX.root()).into_iter().map(|m| {
         (m.name.as_str(), m.full)
     }).collect()
 });
@@ -86,29 +130,6 @@ pub static PROCESSED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLoc
     INTERPRETED_ACTUAL.iter().map(|(name, def)| {
         (*name, def.clone().to_c(&CONFIG))
     }).collect()
-});
-
-pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    PROCESSED_ACTUAL.iter().map(|(name, def)| {
-        (*name, def.header().root())
-    }).collect()
-});
-
-pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    // PROCESSED_ACTUAL.iter().map(|(name, def)| {
-    //     (*name, def.code(&CONFIG).to_string())
-    // }).collect()
-    todo!()
-});
-
-pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
-    exception: AbiExceptionConfig {
-        value_type: "Result".to_string(),
-        success_value: "Result::Success".to_string(),
-        nullref_value: "Result::ArgumentNull".to_string(),
-        generic_value: "Result::Unknown".to_string(),
-        custom_values: std::collections::HashMap::new(),
-    },
 });
 
 pub fn collection_eq<A, E>(

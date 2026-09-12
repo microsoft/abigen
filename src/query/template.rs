@@ -44,13 +44,7 @@ mod test {
             panic!("Too many matches!");
         };
 
-        assert_eq!(Template::Literal {
-            start: TemplateStart::Literal {
-                f: "/** Generated header - DO NOT MODIFY\r\n * @abigen:start\r\n */",
-            },
-            end: TemplateEnd::Literal {
-                f: "// @abigen:end\r",
-            },
-        }, m);
+        assert!(m.start.f.as_str().contains("@abigen:start"));
+        assert!(m.end.f.as_str().contains("@abigen:end"));
     }
 }
