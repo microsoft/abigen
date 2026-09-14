@@ -154,54 +154,58 @@ pub fn collection_eq<A, E>(
 }
 
 macro_rules! gen_test(
-    ($name:ident) => {
+    ($cpp_name:ident, $c_name:ident) => {
         #[cfg(test)]
-        mod $name {
+        mod $cpp_name {
             #[allow(unused)]
             use super::*;
 
             #[test]
             fn parsed() {
                 assert_eq!(
-                    PARSED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
-                    PARSED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                    PARSED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
+                    PARSED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
             #[test]
             fn interpreted() {
                 assert_eq!(
-                    INTERPRETED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
-                    INTERPRETED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                    INTERPRETED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
+                    INTERPRETED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
             #[test]
             fn processed() {
                 assert_eq!(
-                    PROCESSED_EXPECTED.get(stringify!($name)).expect(concat!("No expected ", stringify!($name))),
-                    PROCESSED_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
+                    PROCESSED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
+                    PROCESSED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
             #[test]
             fn h() {
-                assert_eq!(
-                    H_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-                    H_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-                );
+                H_EXPECTED.get(stringify!($c_name))
+                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                    .diff(
+                        H_ACTUAL.get(stringify!($c_name))
+                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                    ).expect("Mismatch");
             }
 
             #[test]
             fn cpp() {
-                assert_eq!(
-                    CPP_EXPECTED.get(concat!("myclass_", stringify!($name))).expect(concat!("No expected ", stringify!($name))),
-                    CPP_ACTUAL.get(stringify!($name)).expect(concat!("No actual ", stringify!($name))),
-                );
+                CPP_EXPECTED.get(stringify!($c_name))
+                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                    .diff(
+                        CPP_ACTUAL.get(stringify!($c_name))
+                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                    ).expect("Mismatch");
             }
         }
     };
 );
 
-gen_test!(config);
-gen_test!(set_config);
+gen_test!(config, myclass_config);
+gen_test!(set_config, myclass_set_config);

@@ -30,3 +30,12 @@ impl<const D: char, T> Display for Delimited<D, T> where T: Display {
         Ok(())
     }
 }
+
+pub(crate) fn indent(i: u32) -> impl std::fmt::Display {
+    std::fmt::from_fn(move |f| {
+        for _ in 0..i {
+            write!(f, "  ")?
+        }
+        Ok(())
+    })
+}

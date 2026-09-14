@@ -1,10 +1,10 @@
 use std::{
-    borrow::Cow, fs, path::Path, str, sync::{LazyLock, RwLock},
+    borrow::Cow, fmt::{self, Debug, Display}, fs, path::Path, str, sync::{LazyLock, RwLock},
 };
 
-use tree_sitter::{Node, Parser, Tree, TreeCursor};
+use tree_sitter::{Node, Parser, Tree, TreeCursor, Point};
 
-use crate::{Error, LANG};
+use crate::{Error, LANG, indent};
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
@@ -99,7 +99,7 @@ pub struct ContextNode<'t> {
 }
 
 impl<'t> ContextNode<'t> {
-    pub fn walk(&'t self) -> ContextCursor<'t> {
+    pub fn walk(&self) -> ContextCursor<'t> {
         ContextCursor {
             context: self.context,
             cursor: self.node.walk(),
@@ -108,6 +108,10 @@ impl<'t> ContextNode<'t> {
 
     pub fn as_str(&self) -> &'t str {
         &self.context.as_str()[self.node.start_byte()..self.node.end_byte()]
+    }
+
+    pub fn diff<'b>(&self, other: &ContextNode<'b>) -> Result<(), EqError<'t, 'b>> {
+        cursor_eq(&mut self.walk(), &mut other.walk())
     }
 }
 
@@ -131,7 +135,7 @@ impl<'a> std::fmt::Debug for ContextNode<'a> {
 
 impl PartialEq<ContextNode<'_>> for ContextNode<'_> {
     fn eq(&self, other: &ContextNode<'_>) -> bool {
-        cursor_eq(&mut self.walk(), &mut other.walk())
+        cursor_eq(&mut self.walk(), &mut other.walk()).is_ok()
     }
 }
 
@@ -147,29 +151,61 @@ impl<'t> ContextCursor<'t> {
     }
 }
 
-fn cursor_eq(a: &mut ContextCursor<'_>, b: &mut ContextCursor<'_>) -> bool {
-    if a.cursor.node().kind_id() != b.cursor.node().kind_id() 
-        || a.cursor.node().child_count() != b.cursor.node().child_count() {
-        // a and b are superficially different different
-        return false;
-    } else if a.cursor.node().child_count() == 0 && a.node().as_str() != b.node().as_str() {
-        // a and b are textually identical leaf nodes
-        return true;
+#[derive(Clone, Copy)]
+pub struct EqError<'a, 'e> {
+    pub actual: ContextNode<'a>,
+    pub expected: ContextNode<'e>,
+}
+impl<'a, 'e> EqError<'a, 'e> {
+    pub fn new(a: ContextNode<'a>, e: ContextNode<'e>) -> Self {
+        Self {
+            actual: a,
+            expected: e,
+        }
+    }
+}
+impl Debug for EqError<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Expected at {}:\n{}", self.expected.node.start_position(), self.expected.as_str())?;
+        write!(f, "Actual at {}:\n{}", self.actual.node.start_position(), self.actual.as_str())
+    }
+}
+impl Display for EqError<'_, '_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl std::error::Error for EqError<'_, '_>{}
+
+fn cursor_eq<'a, 'e>(a: &mut ContextCursor<'a>, e: &mut ContextCursor<'e>) -> Result<(), EqError<'a, 'e>> {
+    if a.cursor.node().kind_id() != e.cursor.node().kind_id() 
+        || a.cursor.node().child_count() != e.cursor.node().child_count() {
+        // a and b are superficially different
+        return Err(EqError::new(a.node(), e.node()));
+    }
+
+    if a.cursor.node().child_count() == 0 {
+        if a.node().as_str() == e.node().as_str() {
+            // a and b are textually identical leaf nodes
+            return Ok(());
+        } else {
+            return Err(EqError::new(a.node(), e.node()));
+        }
     }
 
     a.cursor.goto_first_child();
-    b.cursor.goto_first_child();
+    e.cursor.goto_first_child();
 
     loop {
-        if !cursor_eq(a, b) {
-            return false;
-        } else if !a.cursor.goto_next_sibling() || !b.cursor.goto_next_sibling() {
+        if let Err(e) = cursor_eq(a, e) {
+            return Err(e);
+        } else if !a.cursor.goto_next_sibling() || !e.cursor.goto_next_sibling() {
             break;
         }
     }
 
     a.cursor.goto_parent();
-    b.cursor.goto_parent();
+    e.cursor.goto_parent();
 
-    true
+    Ok(())
 }

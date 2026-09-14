@@ -3,15 +3,17 @@ use std::fmt::{self, Display};
 
 impl ApiFnDef {
     pub fn header(&self) -> impl Display {
-        fmt::from_fn(|f| fmt_proto(f, self))
+        fmt::from_fn(|f| {
+            fmt_proto(f, self)?;
+            write!(f, ";")
+        })
     }
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            write!(f, "{proto}\n{body}",
-                proto = fmt::from_fn(|f| fmt_proto(f, self)),
-                body = fmt::from_fn(|f| fmt_body(f, self, config)),
-            )
+            fmt_proto(f, self)?;
+            write!(f, "\n")?;
+            fmt_body(f, self, config)
         })
     }
 }
