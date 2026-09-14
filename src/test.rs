@@ -52,7 +52,7 @@ pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
 
 pub static H_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
     let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.to_c(&CONFIG).header()))
+    Context::from(format!("{}", api.to_c(&CONFIG).header(&CONFIG)))
 });
 
 pub static CPP_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {

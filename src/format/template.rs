@@ -63,11 +63,11 @@ impl Template {
         })
     }
 
-    pub fn header(&self, api: &Api) -> impl Display {
+    pub fn header(&self, api: &Api, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
             writeln!(f, "{head}\n{body}\n{foot}",
                 head = self.header,
-                body = api.header(),
+                body = api.header(config),
                 foot = self.footer,
             )
         })

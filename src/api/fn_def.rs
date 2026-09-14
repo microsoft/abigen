@@ -1,8 +1,10 @@
 use crate::{
     AbiConfig,
     query::{FnArg, FnArgType, FnDef, FnRetType},
+    format::Delimited,
 };
 use std::hash::Hash;
+use std::fmt::{self, Display};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -79,6 +81,27 @@ impl ApiFnDef {
     }
 }
 
+impl ApiFnDef {
+    pub fn header(&self, _config: &AbiConfig) -> impl Display {
+        fmt::from_fn(|f| {
+            fmt_proto(f, self)?;
+            write!(f, ";")
+        })
+    }
+
+    pub fn code(&self, config: &AbiConfig) -> impl Display {
+        fmt::from_fn(|f| {
+            fmt_proto(f, self)?;
+            write!(f, "\n")?;
+            fmt_body(f, self, config)
+        })
+    }
+
+    pub fn pointer(&self, _config: &AbiConfig) -> impl Display {
+        todo!()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnArg {
     pub typ: ApiTyperef,
@@ -94,11 +117,12 @@ impl From<&FnArg::Match<'_>> for ApiFnArg {
     }
 }
 
-impl ApiFnArg {
-    pub fn to_c(&self, config: &AbiConfig) -> Self {
-        let mut c = self.clone();
-        c.typ = c.typ.to_c(config);
-        c
+impl Display for ApiFnArg {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{typ} {name}",
+            typ = self.typ,
+            name = self.name,
+        )
     }
 }
 
@@ -139,12 +163,18 @@ impl From<&FnRetType::Match<'_>> for RefType {
     }
 }
 
-impl RefType {
-    pub fn to_c(&self, _config: &AbiConfig) -> Self {
+impl Display for RefType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::OwnedReference => Self::Pointer(2),
-            Self::Reference => Self::Pointer(1),
-            t => t.clone(),
+            Self::OwnedReference | Self::Pointer(2) => write!(f, "**"),
+            Self::Reference | Self::Pointer(1) => write!(f, "*"),
+            Self::Value | Self::Pointer(0) => Ok(()),
+            Self::Pointer(d) => {
+                for _ in 0..*d {
+                    write!(f, "*")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -154,6 +184,16 @@ pub struct ApiTyperef {
     pub typ: String,
     pub is_const: bool,
     pub relation: RefType,
+}
+
+impl Display for ApiTyperef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{const} {typ} {rel}",
+            const = if self.is_const { "const" } else { "" },
+            typ = self.typ,
+            rel = self.relation,
+        )
+    }
 }
 
 impl From<&FnArgType::Match<'_>> for ApiTyperef {
@@ -184,10 +224,102 @@ impl ApiTyperef {
             relation: RefType::Value,
         }
     }
+}
 
-    pub fn to_c(&self, config: &AbiConfig) -> Self {
-        let mut c = self.clone();
-        c.relation = c.relation.to_c(config);
-        c
+
+fn fmt_proto(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef) -> std::fmt::Result {
+    write!(f, "{ret} {name}({args})",
+        ret = item.ret,
+        name = item.name,
+        args = item.args.iter().collect::<Delimited<',', _>>(),
+    )
+}
+
+fn fmt_body(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiConfig) -> std::fmt::Result {
+    let nullchecks: Delimited<'\n', _> = item.args.iter()
+        .map(|a| {
+            fmt::from_fn(|f| {
+                fmt_body_nullcheck(f, a, config)
+            })
+        }).collect();
+
+    writeln!(f, r#"
+        {{
+            {nullchecks}
+            {exec}
+            return {success};
+        }}"#,
+        exec = fmt::from_fn(|f| {
+            if item.noexcept {
+                fmt_body_exec(f, item, config)
+            } else {
+                fmt_body_try_exec(f, item, config)
+            }
+        }),
+        success = config.exception.success_value,
+    )
+}
+
+fn fmt_body_nullcheck(f: &mut std::fmt::Formatter<'_>, item: &ApiFnArg, config: &AbiConfig) -> std::fmt::Result {
+    if let RefType::Pointer(depth) = item.typ.relation {
+        for i in 0..depth {
+            write!(f, "if (")?;
+            for _ in 0..i {
+                write!(f, "*")?;
+            }
+            writeln!(f, "{name} == nullptr) {{ return {nullref_exception}; }}",
+                name = item.name,
+                nullref_exception = config.exception.nullref_value,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn fmt_body_try_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiConfig) -> std::fmt::Result {
+    let custom_exceptions: Delimited<'\n', _> = config.exception.custom_values.iter()
+        .map(|(err, ret)| {
+            fmt::from_fn(move |f| {
+                write!(f, "catch ({err}) {{ return {ret}; }}")
+            })
+        }).collect();
+
+    write!(f, r#"
+        try {{ {exec} }}
+        {custom_exceptions}
+        catch (...) {{ return {generic_exception}; }}
+    "#,
+        exec = fmt::from_fn(|f| fmt_body_exec(f, item, config)),
+        generic_exception = config.exception.generic_value,
+    )
+}
+
+fn fmt_body_exec(f: &mut std::fmt::Formatter<'_>, item: &ApiFnDef, config: &AbiConfig) -> std::fmt::Result {
+    if item.args[item.args.len()-1].name == "out" {
+        // no "self", no "out"
+        let other_args: Delimited<',', _> = item.args[1..item.args.len()-1].iter()
+            .map(|a| {
+                fmt::from_fn(|f| {
+                    write!(f, "{}", a.name)
+                })
+            })
+            .collect();
+
+        write!(f, "*out = nullptr; *out = self->{name}({other_args});",
+            name = item.name,
+        )
+    } else {
+        // no "self"
+        let args: Delimited<',', _> = item.args[1..].iter()
+            .map(|a| {
+                fmt::from_fn(|f| {
+                    write!(f, "{}", a.name)
+                })
+            })
+            .collect();
+
+        write!(f, "self->{name}({args});",
+            name = item.name,
+        )
     }
 }

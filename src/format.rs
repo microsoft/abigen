@@ -4,8 +4,6 @@ pub use node::*;
 mod template;
 pub use template::*;
 
-mod fn_def;
-
 use std::fmt::Display;
 
 pub(crate) struct Delimited<const D: char, T> where T: Display {

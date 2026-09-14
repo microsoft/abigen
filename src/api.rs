@@ -33,10 +33,10 @@ impl Api {
         }
     }
 
-    pub fn header(&self) -> impl Display {
+    pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
             for func in &self.functions {
-                writeln!(f, "{}", func.header())?;
+                writeln!(f, "{}", func.header(config))?;
             }
             Ok(())
         })
