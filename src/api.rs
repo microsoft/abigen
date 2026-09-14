@@ -27,12 +27,6 @@ impl Api {
         Ok(s)
     }
 
-    pub fn to_c(self, config: &AbiConfig) -> Self {
-        Self {
-            functions: self.functions.into_iter().map(|f| f.to_c(config)).collect()
-        }
-    }
-
     pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
             for func in &self.functions {

@@ -5,8 +5,6 @@ mod expected_parsed;
 pub use expected_parsed::*;
 mod expected_interpreted;
 pub use expected_interpreted::*;
-mod expected_processed;
-pub use expected_processed::*;
 
 pub static CRATE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -52,22 +50,31 @@ pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
 
 pub static H_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
     let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.to_c(&CONFIG).header(&CONFIG)))
+    Context::from(format!("{}", api.header(&CONFIG)))
 });
 
 pub static CPP_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
     let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.to_c(&CONFIG).code(&CONFIG)))
+    Context::from(format!("{}", api.code(&CONFIG)))
 });
 
 pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     HeaderDecl::Match::from_node(H_ACTUAL_CTX.root()).into_iter().map(|m| {
+        println!("Found actual decl {}", m.name.as_str());
         (m.name.as_str(), m.full)
     }).collect()
 });
 
+#[test]
+#[ignore]
+fn print_h_actual() {
+    println!("{}", H_ACTUAL_CTX.root());
+    panic!()
+}
+
 pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     CodeDef::Match::from_node(CPP_ACTUAL_CTX.root()).into_iter().map(|m| {
+        println!("Found actual def {}", m.name.as_str());
         (m.name.as_str(), m.full)
     }).collect()
 });
@@ -126,12 +133,6 @@ pub static INTERPRETED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyL
     }).collect()
 });
 
-pub static PROCESSED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
-    INTERPRETED_ACTUAL.iter().map(|(name, def)| {
-        (*name, def.clone().to_c(&CONFIG))
-    }).collect()
-});
-
 pub fn collection_eq<A, E>(
     actual: impl IntoIterator<Item = A>,
     expected: impl IntoIterator<Item = E>,
@@ -173,14 +174,6 @@ macro_rules! gen_test(
                 assert_eq!(
                     INTERPRETED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
                     INTERPRETED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
-                );
-            }
-
-            #[test]
-            fn processed() {
-                assert_eq!(
-                    PROCESSED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    PROCESSED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
