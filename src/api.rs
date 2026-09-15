@@ -5,6 +5,18 @@ use crate::{AbiConfig, Context, Error, query::FnDef};
 mod fn_def;
 pub use fn_def::*;
 
+const PRE: &'static str = r#"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"#;
+
+const POST: &'static str = r#"
+#ifdef __cplusplus
+} // extern "C"
+#endif
+"#;
+
 #[derive(Debug, Clone, Default)]
 pub struct Api {
     pub functions: Vec<ApiFnDef>,
@@ -29,19 +41,21 @@ impl Api {
 
     pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
+            writeln!(f, "{PRE}")?;
             for func in &self.functions {
                 writeln!(f, "{}", func.header(config))?;
             }
-            Ok(())
+            writeln!(f, "{POST}")
         })
     }
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
+            writeln!(f, "{PRE}")?;
             for func in &self.functions {
                 writeln!(f, "{}", func.code(config))?;
             }
-            Ok(())
+            writeln!(f, "{POST}")
         })
     }
 }

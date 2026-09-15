@@ -50,17 +50,16 @@ pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
 
 pub static H_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
     let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.header(&CONFIG)))
+    Context::from(api.header(&CONFIG).to_string())
 });
 
 pub static CPP_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
     let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.code(&CONFIG)))
+    Context::from(api.code(&CONFIG).to_string())
 });
 
 pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     HeaderDecl::Match::from_node(H_ACTUAL_CTX.root()).into_iter().map(|m| {
-        println!("Found actual decl {}", m.name.as_str());
         (m.name.as_str(), m.full)
     }).collect()
 });
@@ -74,10 +73,16 @@ fn print_h_actual() {
 
 pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
     CodeDef::Match::from_node(CPP_ACTUAL_CTX.root()).into_iter().map(|m| {
-        println!("Found actual def {}", m.name.as_str());
         (m.name.as_str(), m.full)
     }).collect()
 });
+
+#[test]
+#[ignore]
+fn print_cpp_actual() {
+    println!("{}", CPP_ACTUAL_CTX.root());
+    panic!()
+}
 
 structured_query! {
     name: HeaderDecl,
@@ -179,21 +184,21 @@ macro_rules! gen_test(
 
             #[test]
             fn h() {
-                H_EXPECTED.get(stringify!($c_name))
-                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                H_ACTUAL.get(stringify!($c_name))
+                    .expect(concat!("No actual ", stringify!($cpp_name)))
                     .diff(
-                        H_ACTUAL.get(stringify!($c_name))
-                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                        H_EXPECTED.get(stringify!($c_name))
+                            .expect(concat!("No expected ", stringify!($cpp_name)))
                     ).expect("Mismatch");
             }
 
             #[test]
             fn cpp() {
-                CPP_EXPECTED.get(stringify!($c_name))
-                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                CPP_ACTUAL.get(stringify!($c_name))
+                    .expect(concat!("No actual ", stringify!($cpp_name)))
                     .diff(
-                        CPP_ACTUAL.get(stringify!($c_name))
-                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                        CPP_EXPECTED.get(stringify!($c_name))
+                            .expect(concat!("No expected ", stringify!($cpp_name)))
                     ).expect("Mismatch");
             }
         }

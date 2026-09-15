@@ -4,10 +4,11 @@ use crate::{ApiFnDef, ApiFnArg, ApiTyperef, RefType};
 pub static INTERPRETED_EXPECTED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
     HashMap::from_iter([
         ("config", ApiFnDef {
-            name_parts: vec!["MyClass".to_string(), "config".to_string()],
+            name: "config".to_string(),
+            fqns: vec!["MyClass".to_string()],
             ret: ApiTyperef {
                 typ: "Config".to_string(),
-                relation: RefType::Reference,
+                relation: RefType::OutReference,
                 is_const: true,
             },
             args: vec![],
@@ -15,7 +16,8 @@ pub static INTERPRETED_EXPECTED: LazyLock<HashMap<&'static str, ApiFnDef>> = Laz
             immut: true,
         }),
         ("set_config", ApiFnDef {
-            name_parts: vec!["MyClass".to_string(), "set_config".to_string()],
+            name: "set_config".to_string(),
+            fqns: vec!["MyClass".to_string()],
             ret: ApiTyperef::void(),
             args: vec![
                 ApiFnArg {
