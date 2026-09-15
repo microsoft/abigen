@@ -133,7 +133,7 @@ impl ApiFnDef {
             writeln!(
                 f,
                 "catch (...) {{ return {}; }}",
-                config.exception.generic_value
+                config.exception.generic_failure_value
             )
         })
     }

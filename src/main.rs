@@ -2,6 +2,11 @@ use abigen::{AbiConfig, Api, Template};
 use clap::Parser;
 use std::{io::Write, path::PathBuf};
 
+/// Generate a stable C ABI (application binary interface) for a C++ library.
+/// 
+/// Analyzes the provided C++ header file, and generates a C99 header and C++ implementation with functions that call
+/// into the header's class methods. If template files are supplied, the generated content will be inserted between
+/// "@abigen:start" and "@abigen:end" comment tags.
 #[derive(Parser)]
 struct Cli {
     /// A C++ header file to be mapped to C
@@ -23,6 +28,9 @@ struct Cli {
     /// One of "null", "stdout", "stderr", or the path to an output file
     #[arg(long, default_value = "null")]
     pub code: OutputType,
+
+    #[arg(long)]
+    pub config_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -70,8 +78,9 @@ impl Write for OutputType {
 
 fn main() {
     let mut args = Cli::parse();
+    let mut config = AbiConfig::default();
 
-    let config = AbiConfig::default();
+    // read input files
 
     let api = Api::from_file(&args.input)
         .expect("Failed to load input header");
@@ -87,6 +96,13 @@ fn main() {
     } else {
         Template::default()
     };
+
+    if let Some(p) = args.config_file {
+        let buf = std::fs::read(p).expect("Failed to read config file");
+        config = toml::from_slice(&buf).expect("Failed to parse config file");
+    }
+
+    // write output files
 
     write!(args.header, "{}", template_h.header(&api, &config))
         .expect("Failed to write header file");

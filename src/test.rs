@@ -1,5 +1,5 @@
 use crate::{
-    AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template,
+    AbiConfig, Api, ApiFnDef, Context, ContextNode, Template,
     query::{FnDef, structured_query},
 };
 use std::{
@@ -16,14 +16,10 @@ mod expected_parsed;
 pub static CRATE_DIR: LazyLock<PathBuf> =
     LazyLock::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
-pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
-    exception: AbiExceptionConfig {
-        value_type: "Result".to_string(),
-        success_value: "Result::Success".to_string(),
-        nullref_value: "Result::ArgumentNull".to_string(),
-        generic_value: "Result::Unknown".to_string(),
-        custom_values: std::collections::HashMap::new(),
-    },
+pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
+    let buf = std::fs::read(CRATE_DIR.join("src/test/config.toml"))
+        .expect("Failed to read config");
+    toml::from_slice(&buf).expect("Failed to parse config")
 });
 
 structured_query! {
