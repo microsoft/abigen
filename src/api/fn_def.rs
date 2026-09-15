@@ -18,10 +18,11 @@ pub struct ApiFnDef {
 
 impl From<&FnDef::Match<'_>> for ApiFnDef {
     fn from(value: &FnDef::Match) -> Self {
+        let mut fqns = vec![value.class.as_str().to_string()];
         Self {
             ret: ApiTyperef::from(&value.ret),
             name: value.decl.name.as_str().to_string(),
-            fqns: value.class.iter().map(|c| c.as_str().to_string()).collect(),
+            fqns,
             args: value.decl.args.iter().map(|a| a.into()).collect::<Vec<_>>(),
             noexcept: value.decl.noexcept.is_some(),
             immut: value.decl.immut.is_some(),

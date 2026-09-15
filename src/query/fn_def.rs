@@ -3,7 +3,8 @@ use crate::query::structured_query;
 structured_query! {
     name: pub FnDef,
     fields: {
-        class: Option,
+        class: _,
+        subclass: [FnDef],
         ret: FnRetType,
         decl: FnDecl,
     },
@@ -15,9 +16,14 @@ structured_query! {
                 .
                 (field_declaration)*
                 .
-                (field_declaration
-                    declarator: (_) @decl
-                ) @ret
+                [
+                    (field_declaration
+                        declarator: (_) @decl
+                    ) @ret
+                    (field_declaration
+                        type: (class_specifier) @subclass
+                    )
+                ]
             )
         )
     "#

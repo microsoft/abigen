@@ -14,11 +14,11 @@ struct Cli {
     pub input: PathBuf,
 
     /// A file that will be updated with the generated header data and written to the output
-    #[arg(long, long = "th")]
+    #[arg(long, alias = "th")]
     pub template_h: Option<PathBuf>,
 
     /// A file that will be updated with the generated function implementations and written to the output
-    #[arg(long, long = "tc")]
+    #[arg(long, alias = "tc")]
     pub template_c: Option<PathBuf>,
 
     /// One of "null", "stdout", "stderr", or the path to an output file
@@ -30,23 +30,23 @@ struct Cli {
     pub code: OutputType,
 
     /// The path to a config file controlling how the C functions are generated
-    #[arg(long, long = "cf")]
+    #[arg(long, alias = "cf")]
     pub config_file: Option<PathBuf>,
 
-    #[arg(long, long = "ex")]
+    #[arg(long, alias = "ex")]
     pub exception_type: Option<String>,
 
-    #[arg(long, long = "exsuccess")]
+    #[arg(long, alias = "exsuccess")]
     pub success_value: Option<String>,
 
-    #[arg(long, long = "exnull")]
+    #[arg(long, alias = "exnull")]
     pub nullref_value: Option<String>,
 
-    #[arg(long, long = "exgeneric")]
+    #[arg(long, alias = "exgeneric")]
     pub generic_failure_value: Option<String>,
 
     /// An exception type name that should be caught, and the corresponding return value, separated by '='
-    #[arg(long, long = "excustom")]
+    #[arg(long, alias = "excustom")]
     pub custom_exception: Vec<String>,
 }
 

@@ -6,7 +6,8 @@ pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::n
         (
             "config",
             FnDef::Literal {
-                class: Some("MyClass"),
+                class: "MyClass",
+                subclass: vec![],
                 ret: FnRetType::Literal {
                     q: Some("const"),
                     t: "Config",
@@ -23,7 +24,8 @@ pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::n
         (
             "set_config",
             FnDef::Literal {
-                class: Some("MyClass"),
+                class: "MyClass",
+                subclass: vec![],
                 ret: FnRetType::Literal {
                     q: None,
                     t: "void",
