@@ -1,4 +1,7 @@
-use std::{fmt::{self, Display}, path::Path};
+use std::{
+    fmt::{self, Display},
+    path::Path,
+};
 
 use crate::{AbiConfig, Context, Error, query::FnDef};
 

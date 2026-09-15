@@ -1,10 +1,14 @@
 use std::{
-    borrow::Cow, fmt::{self, Debug, Display}, fs, path::Path, str, sync::{LazyLock, RwLock},
+    fmt::{self, Debug, Display},
+    fs,
+    path::Path,
+    str,
+    sync::{LazyLock, RwLock},
 };
 
-use tree_sitter::{Node, Parser, Tree, TreeCursor, Point};
+use tree_sitter::{Node, Parser, Tree, TreeCursor};
 
-use crate::{Error, LANG, indent};
+use crate::{Error, LANG};
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
@@ -38,10 +42,7 @@ impl Context {
         let tree = p.parse(&buf, None).unwrap(); // cannot fail
         p.reset();
 
-        Ok(Self {
-            text: buf,
-            tree,
-        })
+        Ok(Self { text: buf, tree })
     }
 
     pub fn root<'t>(&'t self) -> ContextNode<'t> {
@@ -73,10 +74,7 @@ impl From<String> for Context {
         let tree = p.parse(&value, None).unwrap(); // cannot fail
         p.reset();
 
-        Self {
-            text: value,
-            tree,
-        }
+        Self { text: value, tree }
     }
 }
 
@@ -166,8 +164,18 @@ impl<'a, 'e> EqError<'a, 'e> {
 }
 impl Debug for EqError<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Expected at {}:\n{}", self.expected.node.start_position(), self.expected.as_str())?;
-        write!(f, "Actual at {}:\n{}", self.actual.node.start_position(), self.actual.as_str())
+        writeln!(
+            f,
+            "Expected at {}:\n{}",
+            self.expected.node.start_position(),
+            self.expected.as_str()
+        )?;
+        write!(
+            f,
+            "Actual at {}:\n{}",
+            self.actual.node.start_position(),
+            self.actual.as_str()
+        )
     }
 }
 impl Display for EqError<'_, '_> {
@@ -175,11 +183,15 @@ impl Display for EqError<'_, '_> {
         write!(f, "{:?}", self)
     }
 }
-impl std::error::Error for EqError<'_, '_>{}
+impl std::error::Error for EqError<'_, '_> {}
 
-fn cursor_eq<'a, 'e>(a: &mut ContextCursor<'a>, e: &mut ContextCursor<'e>) -> Result<(), EqError<'a, 'e>> {
-    if a.cursor.node().kind_id() != e.cursor.node().kind_id() 
-        || a.cursor.node().child_count() != e.cursor.node().child_count() {
+fn cursor_eq<'a, 'e>(
+    a: &mut ContextCursor<'a>,
+    e: &mut ContextCursor<'e>,
+) -> Result<(), EqError<'a, 'e>> {
+    if a.cursor.node().kind_id() != e.cursor.node().kind_id()
+        || a.cursor.node().child_count() != e.cursor.node().child_count()
+    {
         // a and b are superficially different
         return Err(EqError::new(a.node(), e.node()));
     }

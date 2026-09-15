@@ -1,10 +1,10 @@
 use crate::{
     AbiConfig,
-    query::{FnArg, FnArgType, FnDef, FnRetType},
     format::Delimited,
+    query::{FnArg, FnArgType, FnDef, FnRetType},
 };
-use std::{borrow::Cow, hash::Hash};
 use std::fmt::{self, Display};
+use std::{borrow::Cow, hash::Hash};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -31,14 +31,14 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
 
 impl ApiFnDef {
     pub fn header(&self, config: &AbiConfig) -> impl Display {
-        fmt::from_fn(|f| {
-            write!(f, "{};", self.proto(config))
-        })
+        fmt::from_fn(|f| write!(f, "{};", self.proto(config)))
     }
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            write!(f, "{proto}\n{body}",
+            write!(
+                f,
+                "{proto}\n{body}",
                 proto = self.proto(config),
                 body = self.body(config),
             )
@@ -50,7 +50,8 @@ impl ApiFnDef {
     }
 
     fn name_c(&self) -> impl Display {
-        self.fqns.iter()
+        self.fqns
+            .iter()
             .map(|p| p.to_lowercase())
             .chain([self.name.to_lowercase()].into_iter())
             .collect::<Delimited<'_'>>()
@@ -61,7 +62,7 @@ impl ApiFnDef {
         self.fqns.iter().collect::<Delimited<'_'>>()
     }
 
-    fn args_c<'a>(&'a self) -> impl IntoIterator<Item=Cow<'a, ApiFnArg>> {
+    fn args_c<'a>(&'a self) -> impl IntoIterator<Item = Cow<'a, ApiFnArg>> {
         let mut args: Vec<_> = self.args.iter().map(|a| Cow::Borrowed(a)).collect();
 
         let self_arg = ApiFnArg::self_arg(self.immut, self.inst_handle_t().to_string());
@@ -76,10 +77,16 @@ impl ApiFnDef {
 
     fn proto(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            write!(f, "{ret} {name}({args})",
+            write!(
+                f,
+                "{ret} {name}({args})",
                 ret = config.exception.value_type,
                 name = self.name_c(),
-                args = self.args_c().into_iter().map(|a| a.decl().to_string()).collect::<Delimited<','>>(),
+                args = self
+                    .args_c()
+                    .into_iter()
+                    .map(|a| a.decl().to_string())
+                    .collect::<Delimited<','>>(),
             )
         })
     }
@@ -111,29 +118,34 @@ impl ApiFnDef {
                 writeln!(f, "catch ({catch}) {{ return {ret}; }}")?;
             }
 
-            writeln!(f, "catch (...) {{ return {}; }}", config.exception.generic_value)
+            writeln!(
+                f,
+                "catch (...) {{ return {}; }}",
+                config.exception.generic_value
+            )
         })
     }
 
     fn body_exec(&self, _config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            let args = self.args.iter()
+            let args = self
+                .args
+                .iter()
                 .map(|a| a.deref())
                 .collect::<Delimited<','>>();
 
             if let Some(o) = ApiFnArg::out_arg(&self.ret) {
-                writeln!(f, "{out} = self->{name}({args});",
+                writeln!(
+                    f,
+                    "{out} = self->{name}({args});",
                     out = o.deref(),
                     name = self.name,
                 )
             } else {
-                writeln!(f, "self->{name}({args});",
-                    name = self.name,
-                )
+                writeln!(f, "self->{name}({args});", name = self.name,)
             }
         })
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -181,10 +193,10 @@ impl ApiFnArg {
                     is_const: false,
                     typ: t.typ.clone(),
                     relation: if let RefType::Pointer(d) = t.relation {
-                        RefType::Pointer(d+1)
+                        RefType::Pointer(d + 1)
                     } else {
                         RefType::OutReference
-                    }
+                    },
                 },
                 name: "out".to_string(),
             })
@@ -192,7 +204,7 @@ impl ApiFnArg {
             None
         }
     }
-    
+
     fn nullcheck(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
             let depth = match self.typ.relation {
@@ -207,7 +219,9 @@ impl ApiFnArg {
                 for _ in 0..i {
                     write!(f, "*")?;
                 }
-                writeln!(f, "{name} == nullptr) {{ return {nullref_exception}; }}",
+                writeln!(
+                    f,
+                    "{name} == nullptr) {{ return {nullref_exception}; }}",
                     name = self.name,
                     nullref_exception = config.exception.nullref_value,
                 )?;
@@ -218,20 +232,13 @@ impl ApiFnArg {
     }
 
     fn decl(&self) -> impl Display {
-        fmt::from_fn(|f| {
-            write!(f, "{typ} {name}",
-                typ = self.typ,
-                name = self.name,
-            )
-        })
+        fmt::from_fn(|f| write!(f, "{typ} {name}", typ = self.typ, name = self.name,))
     }
 
     fn deref(&self) -> impl Display {
-        fmt::from_fn(|f| {
-            match self.typ.relation {
-                RefType::OutReference | RefType::Reference => write!(f, "*{}", self.name),
-                RefType::Value | RefType::Pointer(_) => write!(f, "{}", self.name),
-            }
+        fmt::from_fn(|f| match self.typ.relation {
+            RefType::OutReference | RefType::Reference => write!(f, "*{}", self.name),
+            RefType::Value | RefType::Pointer(_) => write!(f, "{}", self.name),
         })
     }
 }

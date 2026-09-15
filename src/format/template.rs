@@ -1,5 +1,8 @@
-use std::{fmt::{self, Display}, path::{Path, PathBuf}};
 use crate::{AbiConfig, Api, Context, Error};
+use std::{
+    fmt::{self, Display},
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Template {
@@ -14,9 +17,10 @@ impl Template {
 
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self, Error> {
         match Self::from_buffer(std::fs::read(path.as_ref())?) {
-            Err(Error::Template { message, .. }) => {
-                Err(Error::Template { file: PathBuf::from(path.as_ref()), message })
-            },
+            Err(Error::Template { message, .. }) => Err(Error::Template {
+                file: PathBuf::from(path.as_ref()),
+                message,
+            }),
             x => x,
         }
     }
@@ -65,7 +69,9 @@ impl Template {
 
     pub fn header(&self, api: &Api, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            writeln!(f, "{head}\n{body}\n{foot}",
+            writeln!(
+                f,
+                "{head}\n{body}\n{foot}",
                 head = self.header,
                 body = api.header(config),
                 foot = self.footer,
@@ -75,7 +81,9 @@ impl Template {
 
     pub fn code(&self, api: &Api, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            writeln!(f, "{head}\n{body}\n{foot}",
+            writeln!(
+                f,
+                "{head}\n{body}\n{foot}",
                 head = self.header,
                 body = api.code(config),
                 foot = self.footer,

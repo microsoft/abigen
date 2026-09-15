@@ -8,7 +8,10 @@ use std::fmt::{self, Display, Write};
 
 pub(crate) struct Delimited<const D: char>(String);
 
-impl<const D: char, I> FromIterator<I> for Delimited<D> where I: Display {
+impl<const D: char, I> FromIterator<I> for Delimited<D>
+where
+    I: Display,
+{
     fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
         let mut s = String::new();
         let mut iter = iter.into_iter();
@@ -35,7 +38,7 @@ impl<const D: char> Into<String> for Delimited<D> {
 }
 
 pub(crate) fn indent(i: u32) -> impl std::fmt::Display {
-    std::fmt::from_fn(move |f| {
+    fmt::from_fn(move |f| {
         for _ in 0..i {
             write!(f, "  ")?
         }
