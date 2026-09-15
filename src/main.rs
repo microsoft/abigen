@@ -14,11 +14,11 @@ struct Cli {
     pub input: PathBuf,
 
     /// A file that will be updated with the generated header data and written to the output
-    #[arg(long)]
+    #[arg(long, long = "th")]
     pub template_h: Option<PathBuf>,
 
     /// A file that will be updated with the generated function implementations and written to the output
-    #[arg(long)]
+    #[arg(long, long = "tc")]
     pub template_c: Option<PathBuf>,
 
     /// One of "null", "stdout", "stderr", or the path to an output file
@@ -29,8 +29,25 @@ struct Cli {
     #[arg(long, default_value = "null")]
     pub code: OutputType,
 
-    #[arg(long)]
+    /// The path to a config file controlling how the C functions are generated
+    #[arg(long, long = "cf")]
     pub config_file: Option<PathBuf>,
+
+    #[arg(long, long = "ex")]
+    pub exception_type: Option<String>,
+
+    #[arg(long, long = "exsuccess")]
+    pub success_value: Option<String>,
+
+    #[arg(long, long = "exnull")]
+    pub nullref_value: Option<String>,
+
+    #[arg(long, long = "exgeneric")]
+    pub generic_failure_value: Option<String>,
+
+    /// An exception type name that should be caught, and the corresponding return value, separated by '='
+    #[arg(long, long = "excustom")]
+    pub custom_exception: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -87,12 +104,18 @@ fn main() {
 
     let template_h = if let Some(p) = args.template_h {
         Template::from_file(p).expect("Failed to load header template")
+    } else if let OutputType::File(f) = &args.header
+        && let Ok(true) = std::fs::exists(f) {
+        Template::from_file(f).expect("Failed to load existing header output file for use as a template")
     } else {
         Template::default()
     };
 
     let template_c = if let Some(p) = args.template_c {
         Template::from_file(p).expect("Failed to load code template")
+    } else if let OutputType::File(f) = &args.code
+        && let Ok(true) = std::fs::exists(f) {
+        Template::from_file(f).expect("Failed to load existing code output file for use as a template")
     } else {
         Template::default()
     };
@@ -100,6 +123,29 @@ fn main() {
     if let Some(p) = args.config_file {
         let buf = std::fs::read(p).expect("Failed to read config file");
         config = toml::from_slice(&buf).expect("Failed to parse config file");
+    }
+
+    // apply config options
+
+    if let Some(t) = args.exception_type {
+        config.exception.value_type = t;
+    }
+    if let Some(s) = args.success_value {
+        config.exception.success_value = s;
+    }
+    if let Some(n) = args.nullref_value {
+        config.exception.nullref_value = n;
+    }
+    if let Some(g) = args.generic_failure_value {
+        config.exception.generic_failure_value = g;
+    }
+    if args.custom_exception.len() > 0 {
+        config.exception.custom_values = args.custom_exception.into_iter()
+            .filter_map(|s| {
+                s.split_once('=')
+                    .map(|(e,v)| (e.to_string(), v.to_string()))
+            })
+            .collect();
     }
 
     // write output files
