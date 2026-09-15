@@ -104,15 +104,18 @@ impl<'t> ContextNode<'t> {
         }
     }
 
-    pub fn children(&self, cursor: &mut ContextCursor<'t>) -> impl ExactSizeIterator<Item=Self> {
-        self.node.children(&mut cursor.cursor).map(|c| self.context.wrap(c))
+    pub fn children(&self, cursor: &mut ContextCursor<'t>) -> impl ExactSizeIterator<Item = Self> {
+        self.node
+            .children(&mut cursor.cursor)
+            .map(|c| self.context.wrap(c))
     }
 
     pub fn as_str(&self) -> &'t str {
         &self.context.as_str()[self.node.start_byte()..self.node.end_byte()]
     }
 
-    pub fn diff<'b>(&self, other: &ContextNode<'b>) -> Result<(), EqError<'t, 'b>> {
+    #[cfg(test)]
+    pub(crate) fn diff<'b>(&self, other: &ContextNode<'b>) -> Result<(), EqError<'t, 'b>> {
         cursor_eq(&mut self.walk(), &mut other.walk())
     }
 }
@@ -154,7 +157,7 @@ impl<'t> ContextCursor<'t> {
 }
 
 #[derive(Clone, Copy)]
-pub struct EqError<'a, 'e> {
+pub(crate) struct EqError<'a, 'e> {
     pub actual: &'a Context,
     pub actual_range: Range,
     pub expected: &'e Context,
@@ -228,17 +231,35 @@ impl<'a, 'e> std::ops::Add for EqError<'a, 'e> {
         Self::Output {
             actual: self.actual,
             actual_range: Range {
-                start_byte: self.actual_range.start_byte.min(rhs.actual_range.start_byte),
-                start_point: self.actual_range.start_point.min(rhs.actual_range.start_point),
+                start_byte: self
+                    .actual_range
+                    .start_byte
+                    .min(rhs.actual_range.start_byte),
+                start_point: self
+                    .actual_range
+                    .start_point
+                    .min(rhs.actual_range.start_point),
                 end_byte: self.actual_range.end_byte.max(rhs.actual_range.end_byte),
                 end_point: self.actual_range.end_point.max(rhs.actual_range.end_point),
             },
             expected: self.expected,
             expected_range: Range {
-                start_byte: self.expected_range.start_byte.min(rhs.expected_range.start_byte),
-                start_point: self.expected_range.start_point.min(rhs.expected_range.start_point),
-                end_byte: self.expected_range.end_byte.max(rhs.expected_range.end_byte),
-                end_point: self.expected_range.end_point.max(rhs.expected_range.end_point),
+                start_byte: self
+                    .expected_range
+                    .start_byte
+                    .min(rhs.expected_range.start_byte),
+                start_point: self
+                    .expected_range
+                    .start_point
+                    .min(rhs.expected_range.start_point),
+                end_byte: self
+                    .expected_range
+                    .end_byte
+                    .max(rhs.expected_range.end_byte),
+                end_point: self
+                    .expected_range
+                    .end_point
+                    .max(rhs.expected_range.end_point),
             },
         }
     }
@@ -248,8 +269,7 @@ fn cursor_eq<'a, 'e>(
     a: &mut ContextCursor<'a>,
     e: &mut ContextCursor<'e>,
 ) -> Result<(), EqError<'a, 'e>> {
-    if a.cursor.node().kind_id() != e.cursor.node().kind_id()
-    {
+    if a.cursor.node().kind_id() != e.cursor.node().kind_id() {
         // a and b are superficially different
         return Err(EqError::new(a.node(), e.node()));
     }
@@ -264,22 +284,23 @@ fn cursor_eq<'a, 'e>(
     }
 
     let mut error = None;
-    
+
     let a_has_children = a.cursor.goto_first_child();
     let e_has_children = e.cursor.goto_first_child();
     if a_has_children && !e_has_children {
         let err = EqError::extra(
-            a.node(), 
-            e.context, 
-            e.node().node.end_byte(), 
-            e.node().node.end_position());
+            a.node(),
+            e.context,
+            e.node().node.end_byte(),
+            e.node().node.end_position(),
+        );
         error = error.map_or(Some(err), |old| Some(old + err));
 
         while a.cursor.goto_next_sibling() {
             let err = EqError::extra(
-                a.node(), 
-                e.context, 
-                e.node().node.end_byte(), 
+                a.node(),
+                e.context,
+                e.node().node.end_byte(),
                 e.node().node.end_position(),
             );
             error = error.map_or(Some(err), |old| Some(old + err));
@@ -288,18 +309,20 @@ fn cursor_eq<'a, 'e>(
         return Err(error.unwrap());
     } else if e_has_children && !a_has_children {
         let err = EqError::missing(
-            a.context, 
-            a.node().node.end_byte(), 
-            a.node().node.end_position(), 
-            e.node());
+            a.context,
+            a.node().node.end_byte(),
+            a.node().node.end_position(),
+            e.node(),
+        );
         error = error.map_or(Some(err), |old| Some(old + err));
 
         while a.cursor.goto_next_sibling() {
             let err = EqError::missing(
-                a.context, 
-                a.node().node.end_byte(), 
-                a.node().node.end_position(), 
-                e.node());
+                a.context,
+                a.node().node.end_byte(),
+                a.node().node.end_position(),
+                e.node(),
+            );
             error = error.map_or(Some(err), |old| Some(old + err));
         }
 
@@ -311,13 +334,13 @@ fn cursor_eq<'a, 'e>(
             error = error.map_or(Some(e), |old| Some(old + e));
             break;
         }
-        
+
         if !e.cursor.goto_next_sibling() {
             while a.cursor.goto_next_sibling() {
                 let e = EqError::extra(
-                    a.node(), 
-                    e.context, 
-                    e.node().node.end_byte(), 
+                    a.node(),
+                    e.context,
+                    e.node().node.end_byte(),
                     e.node().node.end_position(),
                 );
                 error = error.map_or(Some(e), |old| Some(old + e));
@@ -326,9 +349,9 @@ fn cursor_eq<'a, 'e>(
         } else if !a.cursor.goto_next_sibling() {
             while e.cursor.goto_next_sibling() {
                 let e = EqError::missing(
-                    a.context, 
-                    a.node().node.end_byte(), 
-                    a.node().node.end_position(), 
+                    a.context,
+                    a.node().node.end_byte(),
+                    a.node().node.end_position(),
                     e.node(),
                 );
                 error = error.map_or(Some(e), |old| Some(old + e));
@@ -343,36 +366,36 @@ fn cursor_eq<'a, 'e>(
     if error.is_some() {
         a.cursor.goto_last_child();
         e.cursor.goto_last_child();
-        
+
         loop {
             if let Err(e) = cursor_eq(a, e) {
-            error = error.map_or(Some(e), |old| Some(old + e));
-            break;
-        }
-        
-        if !e.cursor.goto_previous_sibling() {
-            while a.cursor.goto_previous_sibling() {
-                let e = EqError::extra(
-                    a.node(), 
-                    e.context, 
-                    e.node().node.end_byte(), 
-                    e.node().node.end_position(),
-                );
                 error = error.map_or(Some(e), |old| Some(old + e));
+                break;
             }
-            break;
-        } else if !a.cursor.goto_previous_sibling() {
-            while e.cursor.goto_previous_sibling() {
-                let e = EqError::missing(
-                    a.context, 
-                    a.node().node.end_byte(), 
-                    a.node().node.end_position(), 
-                    e.node(),
-                );
-                error = error.map_or(Some(e), |old| Some(old + e));
+
+            if !e.cursor.goto_previous_sibling() {
+                while a.cursor.goto_previous_sibling() {
+                    let e = EqError::extra(
+                        a.node(),
+                        e.context,
+                        e.node().node.end_byte(),
+                        e.node().node.end_position(),
+                    );
+                    error = error.map_or(Some(e), |old| Some(old + e));
+                }
+                break;
+            } else if !a.cursor.goto_previous_sibling() {
+                while e.cursor.goto_previous_sibling() {
+                    let e = EqError::missing(
+                        a.context,
+                        a.node().node.end_byte(),
+                        a.node().node.end_position(),
+                        e.node(),
+                    );
+                    error = error.map_or(Some(e), |old| Some(old + e));
+                }
+                break;
             }
-            break;
-        }
         }
 
         a.cursor.goto_parent();

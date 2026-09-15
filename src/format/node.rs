@@ -54,7 +54,7 @@ impl Display for ContextNode<'_> {
     }
 }
 
-pub fn print_tree<'t>(
+pub(crate) fn print_tree<'t>(
     f: &mut std::fmt::Formatter,
     mut cursor: ContextCursor<'t>,
 ) -> Result<ContextCursor<'t>, std::fmt::Error> {
@@ -97,7 +97,7 @@ pub fn print_tree<'t>(
     Ok(cursor)
 }
 
-pub struct NodeFormat<'a> {
+struct NodeFormat<'a> {
     pub node: ContextNode<'a>,
     pub field: Option<&'static str>,
 }

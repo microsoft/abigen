@@ -1,7 +1,7 @@
 use std::{
+    collections::HashSet,
     fmt::{self, Display},
     path::Path,
-    collections::HashSet,
 };
 
 use crate::{AbiConfig, Context, Error, query::FnDef};

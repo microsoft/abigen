@@ -1,5 +1,6 @@
 use crate::{
-    AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template, query::{FnDef, structured_query}, test::actual::H_TEMPLATED,
+    AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template,
+    query::{FnDef, structured_query},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -47,7 +48,9 @@ structured_query! {
     /// Find function definitions in a header file
     name: CodeDef,
     fields: {
+        /// The name of the function being declared
         name: _,
+        /// The node of the overall declaration
         full: _,
     },
     query: r#"
@@ -132,17 +135,14 @@ pub mod actual {
             .collect()
     });
 
-    pub static API: LazyLock<Api> = LazyLock::new(|| {
-        Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API")
-    });
+    pub static API: LazyLock<Api> =
+        LazyLock::new(|| Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API"));
 
-    pub static H_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
-        Context::from(input::TEMPLATE_H.header(&API, &CONFIG).to_string())
-    });
+    pub static H_TEMPLATED: LazyLock<Context> =
+        LazyLock::new(|| Context::from(input::TEMPLATE_H.header(&API, &CONFIG).to_string()));
 
-    pub static H_FULL: LazyLock<Context> = LazyLock::new(|| {
-        Context::from(API.header(&CONFIG).to_string())
-    });
+    pub static H_FULL: LazyLock<Context> =
+        LazyLock::new(|| Context::from(API.header(&CONFIG).to_string()));
 
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
         HeaderDecl::Match::from_node(H_FULL.root())
@@ -151,9 +151,8 @@ pub mod actual {
             .collect()
     });
 
-    pub static CPP_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
-        Context::from(input::TEMPLATE_CPP.code(&API, &CONFIG).to_string())
-    });
+    pub static CPP_TEMPLATED: LazyLock<Context> =
+        LazyLock::new(|| Context::from(input::TEMPLATE_CPP.code(&API, &CONFIG).to_string()));
 
     pub static CPP_FULL: LazyLock<Context> = LazyLock::new(|| {
         let api = Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API");
@@ -206,14 +205,16 @@ pub fn collection_eq<A, E>(
 
 #[test]
 fn header() {
-    actual::H_TEMPLATED.root()
+    actual::H_TEMPLATED
+        .root()
         .diff(&expected::H_TEMPLATED.root())
         .expect("Mismatch");
 }
 
 #[test]
 fn code() {
-    actual::CPP_TEMPLATED.root()
+    actual::CPP_TEMPLATED
+        .root()
         .diff(&expected::CPP_TEMPLATED.root())
         .expect("Mismatch");
 }
