@@ -1,5 +1,10 @@
+use std::{
+    io,
+    path::PathBuf,
+    str, string,
+    sync::{PoisonError, RwLockWriteGuard},
+};
 use tree_sitter::{LanguageError, Parser};
-use std::{io, path::PathBuf, str, string, sync::{PoisonError, RwLockWriteGuard}};
 
 #[derive(Debug)]
 pub enum Error {
@@ -50,8 +55,12 @@ impl std::fmt::Display for Error {
             Self::Utf8Ref(e) => write!(f, "{e}"),
             Self::Poison(e) => write!(f, "{e}"),
             Self::Template { file, message } => {
-                write!(f, "Error processing template file '{file}': {message}", file = file.display())
-            },
+                write!(
+                    f,
+                    "Error processing template file '{file}': {message}",
+                    file = file.display()
+                )
+            }
         }
     }
 }

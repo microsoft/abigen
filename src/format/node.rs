@@ -1,11 +1,10 @@
-use crate::{ContextCursor, ContextNode};
+use crate::{ContextCursor, ContextNode, indent};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
     sync::{LazyLock, RwLock, RwLockWriteGuard},
 };
 
-const INDENT: &str = "  ";
 static STRIP_MAP: LazyLock<HashMap<char, char>> =
     LazyLock::new(|| HashMap::from_iter([('\n', '␤'), ('\r', '␍')]));
 
@@ -55,7 +54,7 @@ impl Display for ContextNode<'_> {
     }
 }
 
-pub fn print_tree<'t>(
+pub(crate) fn print_tree<'t>(
     f: &mut std::fmt::Formatter,
     mut cursor: ContextCursor<'t>,
 ) -> Result<ContextCursor<'t>, std::fmt::Error> {
@@ -68,14 +67,11 @@ pub fn print_tree<'t>(
         return Ok(cursor);
     }
 
-    for _ in 0..cursor.cursor.depth() {
-        write!(f, "{INDENT}")?;
-    }
-
     writeln!(
         f,
-        "{}",
-        NodeFormat {
+        "{indent}{node}",
+        indent = indent(cursor.cursor.depth()),
+        node = NodeFormat {
             node: cursor.node(),
             field: cursor.cursor.field_name(),
         },
@@ -84,10 +80,12 @@ pub fn print_tree<'t>(
     if cursor.cursor.depth() as usize == config.max_depth - 1
         && cursor.node().node.named_child_count() > 0
     {
-        for _ in 0..config.max_depth {
-            write!(f, "{INDENT}")?;
-        }
-        writeln!(f, "+{} children", cursor.node().node.named_child_count())?;
+        writeln!(
+            f,
+            "{indent}+{c} children",
+            indent = indent(config.max_depth as u32),
+            c = cursor.node().node.named_child_count(),
+        )?;
     } else if cursor.cursor.goto_first_child() {
         cursor = print_tree(f, cursor)?;
         while cursor.cursor.goto_next_sibling() {
@@ -99,7 +97,7 @@ pub fn print_tree<'t>(
     Ok(cursor)
 }
 
-pub struct NodeFormat<'a> {
+struct NodeFormat<'a> {
     pub node: ContextNode<'a>,
     pub field: Option<&'static str>,
 }

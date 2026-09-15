@@ -10,7 +10,9 @@ enum struct Result
     ArgumentNull = 2
 };
 
-// @abigen:start
+/** Generated header - DO NOT MODIFY
+ * @abigen:start
+ */
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,7 +22,7 @@ Result myclass_config(const MyClass* self, Config** out);
 Result myclass_set_config(MyClass* self, const Config* config);
 
 #ifdef __cplusplus
-} // extern C
+} // extern "C"
 #endif
 
 // @abigen:end

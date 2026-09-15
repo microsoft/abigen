@@ -1,13 +1,29 @@
-use std::{fmt::{self, Display}, path::Path};
+use std::{
+    collections::HashSet,
+    fmt::{self, Display},
+    path::Path,
+};
 
 use crate::{AbiConfig, Context, Error, query::FnDef};
 
 mod fn_def;
 pub use fn_def::*;
 
+const PRE: &'static str = r#"
+#ifdef __cplusplus
+extern "C" {
+#endif
+"#;
+
+const POST: &'static str = r#"
+#ifdef __cplusplus
+} // extern "C"
+#endif
+"#;
+
 #[derive(Debug, Clone, Default)]
 pub struct Api {
-    pub functions: Vec<ApiFnDef>,
+    pub functions: HashSet<ApiFnDef>,
 }
 
 impl Api {
@@ -21,33 +37,35 @@ impl Api {
 
         let ctx = Context::from_buffer(header)?;
         for m in FnDef::Match::from_node(ctx.root()) {
-            s.functions.push(ApiFnDef::from(&m));
+            s.functions.insert(ApiFnDef::from(&m));
         }
 
         Ok(s)
     }
 
-    pub fn to_c(self, config: &AbiConfig) -> Self {
-        Self {
-            functions: self.functions.into_iter().map(|f| f.to_c(config)).collect()
-        }
-    }
-
-    pub fn header(&self) -> impl Display {
+    pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            for func in &self.functions {
-                writeln!(f, "{}", func.header())?;
+            let mut fns: Vec<_> = self.functions.iter().collect();
+            fns.sort();
+
+            writeln!(f, "{PRE}")?;
+            for func in fns {
+                writeln!(f, "{}", func.header(config))?;
             }
-            Ok(())
+            writeln!(f, "{POST}")
         })
     }
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            for func in &self.functions {
+            let mut fns: Vec<_> = self.functions.iter().collect();
+            fns.sort();
+
+            writeln!(f, "{PRE}")?;
+            for func in fns {
                 writeln!(f, "{}", func.code(config))?;
             }
-            Ok(())
+            writeln!(f, "{POST}")
         })
     }
 }

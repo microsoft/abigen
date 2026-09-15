@@ -1,81 +1,34 @@
-use crate::{AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template, query::{FnDef, structured_query}};
-use std::{collections::{HashMap, HashSet}, fmt::Debug, hash::Hash, path::PathBuf, sync::LazyLock};
+use crate::{
+    AbiConfig, Api, ApiFnDef, Context, ContextNode, Template,
+    query::{FnDef, structured_query},
+};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    hash::Hash,
+    path::PathBuf,
+    sync::LazyLock,
+};
 
-mod expected_parsed;
-pub use expected_parsed::*;
 mod expected_interpreted;
-pub use expected_interpreted::*;
-mod expected_processed;
-pub use expected_processed::*;
+mod expected_parsed;
 
-pub static CRATE_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-});
+pub static CRATE_DIR: LazyLock<PathBuf> =
+    LazyLock::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
-pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| AbiConfig {
-    exception: AbiExceptionConfig {
-        value_type: "Result".to_string(),
-        success_value: "Result::Success".to_string(),
-        nullref_value: "Result::ArgumentNull".to_string(),
-        generic_value: "Result::Unknown".to_string(),
-        custom_values: std::collections::HashMap::new(),
-    },
-});
-
-pub static INPUT_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/input.h")).expect("Failed to parse input")
-});
-
-pub static TEMPLATE_H_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/input_template.h")).expect("Failed to parse template header")
-});
-
-pub static TEMPLATE_H: LazyLock<Template> = LazyLock::new(|| {
-    Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template header")
-});
-
-pub static TEMPLATE_CPP_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/input_template.cpp")).expect("Failed to parse template impl")
-});
-
-pub static TEMPLATE_CPP: LazyLock<Template> = LazyLock::new(|| {
-    Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template impl")
-});
-
-pub static H_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/expected.h")).expect("Failed to parse input")
-});
-
-pub static CPP_EXPECTED_CTX: LazyLock<Context> = LazyLock::new(|| {
-    Context::from_file(CRATE_DIR.join("src/test/expected.cpp")).expect("Failed to parse input")
-});
-
-pub static H_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
-    let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.to_c(&CONFIG).header()))
-});
-
-pub static CPP_ACTUAL_CTX: LazyLock<Context> = LazyLock::new(|| {
-    let api = Api::from_buffer(INPUT_CTX.as_str()).expect("Failed to populate API");
-    Context::from(format!("{}", api.to_c(&CONFIG).code(&CONFIG)))
-});
-
-pub static H_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    HeaderDecl::Match::from_node(H_ACTUAL_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str(), m.full)
-    }).collect()
-});
-
-pub static CPP_ACTUAL: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    CodeDef::Match::from_node(CPP_ACTUAL_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str(), m.full)
-    }).collect()
+pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
+    let buf = std::fs::read(CRATE_DIR.join("src/test/config.toml"))
+        .expect("Failed to read config");
+    toml::from_slice(&buf).expect("Failed to parse config")
 });
 
 structured_query! {
+    /// Find function declarations in a header file
     name: HeaderDecl,
     fields: {
+        /// The name of the function being declared
         name: _,
+        /// The node of the overall declaration
         full: _,
     },
     query: r#"
@@ -87,16 +40,13 @@ structured_query! {
     "#,
 }
 
-pub static H_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    HeaderDecl::Match::from_node(H_EXPECTED_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str(), m.full)
-    }).collect()
-});
-
 structured_query! {
+    /// Find function definitions in a header file
     name: CodeDef,
     fields: {
+        /// The name of the function being declared
         name: _,
+        /// The node of the overall declaration
         full: _,
     },
     query: r#"
@@ -108,29 +58,125 @@ structured_query! {
     "#,
 }
 
-pub static CPP_EXPECTED: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-    CodeDef::Match::from_node(CPP_EXPECTED_CTX.root()).into_iter().map(|m| {
-        (m.name.as_str(), m.full)
-    }).collect()
-});
+pub mod input {
+    use super::*;
 
-pub static PARSED_ACTUAL: LazyLock<HashMap<&'static str, FnDef::Match<'static>>> = LazyLock::new(|| {
-    FnDef::Match::from_node(INPUT_CTX.root()).into_iter().map(|m| {
-        (m.decl.name.as_str(), m)
-    }).collect()
-});
+    pub static CTX: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/input.h")).expect("Failed to parse input")
+    });
 
-pub static INTERPRETED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
-    PARSED_ACTUAL.iter().map(|(name, m)| {
-        (*name, ApiFnDef::from(m))
-    }).collect()
-});
+    pub static TEMPLATE_H_CTX: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/input_template.h"))
+            .expect("Failed to parse template header")
+    });
 
-pub static PROCESSED_ACTUAL: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
-    INTERPRETED_ACTUAL.iter().map(|(name, def)| {
-        (*name, def.clone().to_c(&CONFIG))
-    }).collect()
-});
+    pub static TEMPLATE_H: LazyLock<Template> = LazyLock::new(|| {
+        Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template header")
+    });
+
+    pub static TEMPLATE_CPP_CTX: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/input_template.cpp"))
+            .expect("Failed to parse template impl")
+    });
+
+    pub static TEMPLATE_CPP: LazyLock<Template> = LazyLock::new(|| {
+        Template::from_buffer(TEMPLATE_CPP_CTX.as_str()).expect("Failed to interpret template impl")
+    });
+}
+
+pub mod expected {
+    use super::*;
+    pub use expected_interpreted::*;
+    pub use expected_parsed::*;
+
+    pub static H_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/expected.h")).expect("Failed to parse input")
+    });
+
+    pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+        HeaderDecl::Match::from_node(H_TEMPLATED.root())
+            .into_iter()
+            .map(|m| (m.name.as_str(), m.full))
+            .collect()
+    });
+
+    pub static CPP_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/expected.cpp")).expect("Failed to parse input")
+    });
+
+    pub static CPP_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> =
+        LazyLock::new(|| {
+            CodeDef::Match::from_node(CPP_TEMPLATED.root())
+                .into_iter()
+                .map(|m| (m.name.as_str(), m.full))
+                .collect()
+        });
+}
+
+pub mod actual {
+    use super::*;
+
+    pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Match<'static>>> =
+        LazyLock::new(|| {
+            FnDef::Match::from_node(input::CTX.root())
+                .into_iter()
+                .map(|m| (m.decl.name.as_str(), m))
+                .collect()
+        });
+
+    pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
+        PARSED
+            .iter()
+            .map(|(name, m)| (*name, ApiFnDef::from(m)))
+            .collect()
+    });
+
+    pub static API: LazyLock<Api> =
+        LazyLock::new(|| Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API"));
+
+    pub static H_TEMPLATED: LazyLock<Context> =
+        LazyLock::new(|| Context::from(input::TEMPLATE_H.header(&API, &CONFIG).to_string()));
+
+    pub static H_FULL: LazyLock<Context> =
+        LazyLock::new(|| Context::from(API.header(&CONFIG).to_string()));
+
+    pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
+        HeaderDecl::Match::from_node(H_FULL.root())
+            .into_iter()
+            .map(|m| (m.name.as_str(), m.full))
+            .collect()
+    });
+
+    pub static CPP_TEMPLATED: LazyLock<Context> =
+        LazyLock::new(|| Context::from(input::TEMPLATE_CPP.code(&API, &CONFIG).to_string()));
+
+    pub static CPP_FULL: LazyLock<Context> = LazyLock::new(|| {
+        let api = Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API");
+        Context::from(api.code(&CONFIG).to_string())
+    });
+
+    pub static CPP_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> =
+        LazyLock::new(|| {
+            CodeDef::Match::from_node(CPP_FULL.root())
+                .into_iter()
+                .map(|m| (m.name.as_str(), m.full))
+                .collect()
+        });
+
+    #[test]
+    #[ignore]
+    fn print_h() {
+        println!("{}", H_FULL.as_str());
+        panic!()
+    }
+
+    #[test]
+    #[ignore]
+    fn print_cpp() {
+        println!("{}", CPP_FULL.as_str());
+        panic!()
+    }
+}
 
 pub fn collection_eq<A, E>(
     actual: impl IntoIterator<Item = A>,
@@ -153,6 +199,22 @@ pub fn collection_eq<A, E>(
     assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
 }
 
+#[test]
+fn header() {
+    actual::H_TEMPLATED
+        .root()
+        .diff(&expected::H_TEMPLATED.root())
+        .expect("Mismatch");
+}
+
+#[test]
+fn code() {
+    actual::CPP_TEMPLATED
+        .root()
+        .diff(&expected::CPP_TEMPLATED.root())
+        .expect("Mismatch");
+}
+
 macro_rules! gen_test(
     ($cpp_name:ident, $c_name:ident) => {
         #[cfg(test)]
@@ -163,44 +225,36 @@ macro_rules! gen_test(
             #[test]
             fn parsed() {
                 assert_eq!(
-                    PARSED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    PARSED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
+                    expected::PARSED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
+                    actual::PARSED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
             #[test]
             fn interpreted() {
                 assert_eq!(
-                    INTERPRETED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    INTERPRETED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
-                );
-            }
-
-            #[test]
-            fn processed() {
-                assert_eq!(
-                    PROCESSED_EXPECTED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    PROCESSED_ACTUAL.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
+                    expected::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
+                    actual::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
                 );
             }
 
             #[test]
             fn h() {
-                H_EXPECTED.get(stringify!($c_name))
-                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                actual::H_MAP.get(stringify!($c_name))
+                    .expect(concat!("No actual ", stringify!($cpp_name)))
                     .diff(
-                        H_ACTUAL.get(stringify!($c_name))
-                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                        expected::H_MAP.get(stringify!($c_name))
+                            .expect(concat!("No expected ", stringify!($cpp_name)))
                     ).expect("Mismatch");
             }
 
             #[test]
             fn cpp() {
-                CPP_EXPECTED.get(stringify!($c_name))
-                    .expect(concat!("No expected ", stringify!($cpp_name)))
+                actual::CPP_MAP.get(stringify!($c_name))
+                    .expect(concat!("No actual ", stringify!($cpp_name)))
                     .diff(
-                        CPP_ACTUAL.get(stringify!($c_name))
-                            .expect(concat!("No actual ", stringify!($cpp_name)))
+                        expected::CPP_MAP.get(stringify!($c_name))
+                            .expect(concat!("No expected ", stringify!($cpp_name)))
                     ).expect("Mismatch");
             }
         }

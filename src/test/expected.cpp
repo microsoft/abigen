@@ -44,7 +44,7 @@ Result myclass_set_config(MyClass* self, const Config* config)
 }
 
 #ifdef __cplusplus
-} // extern C
+} // extern "C"
 #endif
 
 // @abigen:end

@@ -113,24 +113,28 @@ macro_rules! test_eq (
 
 macro_rules! structured_query {
 (
+    $(#[$meta:meta])*
     name: $vis:vis $name:ident,
     fields: {
-        $( $field:ident: $field_t:tt ),+ $(,)?
+        $( $(#[$f_meta:meta])* $field:ident: $field_t:tt ),+ $(,)?
     },
     query: $query_text:literal $(,)?
 ) => {
+    $(#[$meta])*
     #[allow(non_snake_case)]
     $vis mod $name {
         #[allow(unused)]
         use super::*;
 
+        /// The compiled instance of the query
         pub static QUERY_INST: std::sync::LazyLock<Query> = std::sync::LazyLock::new(|| {
             Query::compile().expect(concat!("Failed to compile query ", stringify!($name)))
         });
 
+        /// The tree-sitter query and the IDs of all the capture fields
         pub struct Query {
             query: ::tree_sitter::Query,
-            $( $field: u32, )*
+            $( $(#[$f_meta])* $field: u32, )*
         }
 
         impl Query {
@@ -146,9 +150,10 @@ macro_rules! structured_query {
             }
         }
 
+
         #[derive(Clone, std::hash::Hash)]
         pub struct Match<'tree> {
-            $( pub $field : $crate::query::field_t!($field_t), )+
+            $( $(#[$f_meta])* pub $field : $crate::query::field_t!($field_t), )+
             byte_range: std::ops::Range<usize>,
         }
 
@@ -199,7 +204,7 @@ macro_rules! structured_query {
         #[allow(unused)]
         #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
         pub struct Literal<'tree> {
-            $( pub $field : $crate::query::test_t!($field_t) ),+
+            $( $(#[$f_meta])* pub $field : $crate::query::test_t!($field_t) ),+
         }
 
         impl<'tree> PartialEq<Match<'tree>> for Literal<'tree> {

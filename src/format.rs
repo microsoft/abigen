@@ -4,35 +4,39 @@ pub use node::*;
 mod template;
 pub use template::*;
 
-mod fn_def;
+use std::fmt::{self, Display};
 
-use std::fmt::Display;
-
-pub(crate) struct Delimited<const D: char, T> where T: Display {
-    items: Vec<T>,
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Delimited<const D: char> {
+    pub parts: Vec<String>,
 }
 
-impl<const D: char, I> FromIterator<I> for Delimited<D, I> where I: Display {
+impl<const D: char, I> FromIterator<I> for Delimited<D>
+where
+    I: Display,
+{
     fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
         Self {
-            items: iter.into_iter().collect(),
+            parts: iter.into_iter().map(|i| i.to_string()).collect(),
         }
     }
 }
-impl<const D: char, T> Display for Delimited<D, T> where T: Display {
+
+impl<const D: char> Display for Delimited<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (i, x) in self.items.iter().enumerate() {
-            if i > 0 {
-                write!(f, "{D}")?;
-            }
-            write!(f, "{x}")?;
+        let mut iter = self.parts.iter();
+        if let Some(p) = iter.next() {
+            write!(f, "{p}")?;
+        }
+        while let Some(p) = iter.next() {
+            write!(f, "{D}{p}")?;
         }
         Ok(())
     }
 }
 
 pub(crate) fn indent(i: u32) -> impl std::fmt::Display {
-    std::fmt::from_fn(move |f| {
+    fmt::from_fn(move |f| {
         for _ in 0..i {
             write!(f, "  ")?
         }

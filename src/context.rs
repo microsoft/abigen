@@ -1,10 +1,14 @@
 use std::{
-    borrow::Cow, fmt::{self, Debug, Display}, fs, path::Path, str, sync::{LazyLock, RwLock},
+    fmt::{self, Debug, Display},
+    fs,
+    path::Path,
+    str,
+    sync::{LazyLock, RwLock},
 };
 
-use tree_sitter::{Node, Parser, Tree, TreeCursor, Point};
+use tree_sitter::{Node, Parser, Point, Range, Tree, TreeCursor};
 
-use crate::{Error, LANG, indent};
+use crate::{Error, LANG};
 
 static PARSER: LazyLock<RwLock<Parser>> = LazyLock::new(|| {
     let mut p = Parser::new();
@@ -38,10 +42,7 @@ impl Context {
         let tree = p.parse(&buf, None).unwrap(); // cannot fail
         p.reset();
 
-        Ok(Self {
-            text: buf,
-            tree,
-        })
+        Ok(Self { text: buf, tree })
     }
 
     pub fn root<'t>(&'t self) -> ContextNode<'t> {
@@ -73,10 +74,7 @@ impl From<String> for Context {
         let tree = p.parse(&value, None).unwrap(); // cannot fail
         p.reset();
 
-        Self {
-            text: value,
-            tree,
-        }
+        Self { text: value, tree }
     }
 }
 
@@ -106,11 +104,18 @@ impl<'t> ContextNode<'t> {
         }
     }
 
+    pub fn children(&self, cursor: &mut ContextCursor<'t>) -> impl ExactSizeIterator<Item = Self> {
+        self.node
+            .children(&mut cursor.cursor)
+            .map(|c| self.context.wrap(c))
+    }
+
     pub fn as_str(&self) -> &'t str {
         &self.context.as_str()[self.node.start_byte()..self.node.end_byte()]
     }
 
-    pub fn diff<'b>(&self, other: &ContextNode<'b>) -> Result<(), EqError<'t, 'b>> {
+    #[cfg(test)]
+    pub(crate) fn diff<'b>(&self, other: &ContextNode<'b>) -> Result<(), EqError<'t, 'b>> {
         cursor_eq(&mut self.walk(), &mut other.walk())
     }
 }
@@ -152,22 +157,26 @@ impl<'t> ContextCursor<'t> {
 }
 
 #[derive(Clone, Copy)]
-pub struct EqError<'a, 'e> {
-    pub actual: ContextNode<'a>,
-    pub expected: ContextNode<'e>,
-}
-impl<'a, 'e> EqError<'a, 'e> {
-    pub fn new(a: ContextNode<'a>, e: ContextNode<'e>) -> Self {
-        Self {
-            actual: a,
-            expected: e,
-        }
-    }
+pub(crate) struct EqError<'a, 'e> {
+    pub actual: &'a Context,
+    pub actual_range: Range,
+    pub expected: &'e Context,
+    pub expected_range: Range,
 }
 impl Debug for EqError<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Expected at {}:\n{}", self.expected.node.start_position(), self.expected.as_str())?;
-        write!(f, "Actual at {}:\n{}", self.actual.node.start_position(), self.actual.as_str())
+        writeln!(
+            f,
+            "Expected at {}:\n{}",
+            self.expected_range.start_point,
+            &self.expected.as_str()[self.expected_range.start_byte..self.expected_range.end_byte],
+        )?;
+        write!(
+            f,
+            "Actual at {}:\n{}",
+            self.actual_range.start_point,
+            &self.actual.as_str()[self.actual_range.start_byte..self.actual_range.end_byte],
+        )
     }
 }
 impl Display for EqError<'_, '_> {
@@ -175,17 +184,98 @@ impl Display for EqError<'_, '_> {
         write!(f, "{:?}", self)
     }
 }
-impl std::error::Error for EqError<'_, '_>{}
+impl std::error::Error for EqError<'_, '_> {}
 
-fn cursor_eq<'a, 'e>(a: &mut ContextCursor<'a>, e: &mut ContextCursor<'e>) -> Result<(), EqError<'a, 'e>> {
-    if a.cursor.node().kind_id() != e.cursor.node().kind_id() 
-        || a.cursor.node().child_count() != e.cursor.node().child_count() {
+impl<'a, 'e> EqError<'a, 'e> {
+    pub fn new(a: ContextNode<'a>, e: ContextNode<'e>) -> Self {
+        Self {
+            actual: a.context,
+            actual_range: a.node.range(),
+            expected: e.context,
+            expected_range: e.node.range(),
+        }
+    }
+
+    pub fn missing(a_ctx: &'a Context, a_byte: usize, a_point: Point, e: ContextNode<'e>) -> Self {
+        Self {
+            actual: a_ctx,
+            actual_range: Range {
+                start_byte: a_byte,
+                start_point: a_point,
+                end_byte: a_byte,
+                end_point: a_point,
+            },
+            expected: e.context,
+            expected_range: e.node.range(),
+        }
+    }
+
+    pub fn extra(a: ContextNode<'a>, e_ctx: &'e Context, e_byte: usize, e_point: Point) -> Self {
+        Self {
+            actual: a.context,
+            actual_range: a.node.range(),
+            expected: e_ctx,
+            expected_range: Range {
+                start_byte: e_byte,
+                start_point: e_point,
+                end_byte: e_byte,
+                end_point: e_point,
+            },
+        }
+    }
+}
+
+impl<'a, 'e> std::ops::Add for EqError<'a, 'e> {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        Self::Output {
+            actual: self.actual,
+            actual_range: Range {
+                start_byte: self
+                    .actual_range
+                    .start_byte
+                    .min(rhs.actual_range.start_byte),
+                start_point: self
+                    .actual_range
+                    .start_point
+                    .min(rhs.actual_range.start_point),
+                end_byte: self.actual_range.end_byte.max(rhs.actual_range.end_byte),
+                end_point: self.actual_range.end_point.max(rhs.actual_range.end_point),
+            },
+            expected: self.expected,
+            expected_range: Range {
+                start_byte: self
+                    .expected_range
+                    .start_byte
+                    .min(rhs.expected_range.start_byte),
+                start_point: self
+                    .expected_range
+                    .start_point
+                    .min(rhs.expected_range.start_point),
+                end_byte: self
+                    .expected_range
+                    .end_byte
+                    .max(rhs.expected_range.end_byte),
+                end_point: self
+                    .expected_range
+                    .end_point
+                    .max(rhs.expected_range.end_point),
+            },
+        }
+    }
+}
+
+fn cursor_eq<'a, 'e>(
+    a: &mut ContextCursor<'a>,
+    e: &mut ContextCursor<'e>,
+) -> Result<(), EqError<'a, 'e>> {
+    if a.cursor.node().kind_id() != e.cursor.node().kind_id() {
         // a and b are superficially different
         return Err(EqError::new(a.node(), e.node()));
     }
 
-    if a.cursor.node().child_count() == 0 {
-        if a.node().as_str() == e.node().as_str() {
+    if a.cursor.node().child_count() == 0 && e.cursor.node().child_count() == 0 {
+        if a.node().as_str().trim() == e.node().as_str().trim() {
             // a and b are textually identical leaf nodes
             return Ok(());
         } else {
@@ -193,13 +283,79 @@ fn cursor_eq<'a, 'e>(a: &mut ContextCursor<'a>, e: &mut ContextCursor<'e>) -> Re
         }
     }
 
-    a.cursor.goto_first_child();
-    e.cursor.goto_first_child();
+    let mut error = None;
+
+    let a_has_children = a.cursor.goto_first_child();
+    let e_has_children = e.cursor.goto_first_child();
+    if a_has_children && !e_has_children {
+        let err = EqError::extra(
+            a.node(),
+            e.context,
+            e.node().node.end_byte(),
+            e.node().node.end_position(),
+        );
+        error = error.map_or(Some(err), |old| Some(old + err));
+
+        while a.cursor.goto_next_sibling() {
+            let err = EqError::extra(
+                a.node(),
+                e.context,
+                e.node().node.end_byte(),
+                e.node().node.end_position(),
+            );
+            error = error.map_or(Some(err), |old| Some(old + err));
+        }
+
+        return Err(error.unwrap());
+    } else if e_has_children && !a_has_children {
+        let err = EqError::missing(
+            a.context,
+            a.node().node.end_byte(),
+            a.node().node.end_position(),
+            e.node(),
+        );
+        error = error.map_or(Some(err), |old| Some(old + err));
+
+        while a.cursor.goto_next_sibling() {
+            let err = EqError::missing(
+                a.context,
+                a.node().node.end_byte(),
+                a.node().node.end_position(),
+                e.node(),
+            );
+            error = error.map_or(Some(err), |old| Some(old + err));
+        }
+
+        return Err(error.unwrap());
+    }
 
     loop {
         if let Err(e) = cursor_eq(a, e) {
-            return Err(e);
-        } else if !a.cursor.goto_next_sibling() || !e.cursor.goto_next_sibling() {
+            error = error.map_or(Some(e), |old| Some(old + e));
+            break;
+        }
+
+        if !e.cursor.goto_next_sibling() {
+            while a.cursor.goto_next_sibling() {
+                let e = EqError::extra(
+                    a.node(),
+                    e.context,
+                    e.node().node.end_byte(),
+                    e.node().node.end_position(),
+                );
+                error = error.map_or(Some(e), |old| Some(old + e));
+            }
+            break;
+        } else if !a.cursor.goto_next_sibling() {
+            while e.cursor.goto_next_sibling() {
+                let e = EqError::missing(
+                    a.context,
+                    a.node().node.end_byte(),
+                    a.node().node.end_position(),
+                    e.node(),
+                );
+                error = error.map_or(Some(e), |old| Some(old + e));
+            }
             break;
         }
     }
@@ -207,5 +363,44 @@ fn cursor_eq<'a, 'e>(a: &mut ContextCursor<'a>, e: &mut ContextCursor<'e>) -> Re
     a.cursor.goto_parent();
     e.cursor.goto_parent();
 
-    Ok(())
+    if error.is_some() {
+        a.cursor.goto_last_child();
+        e.cursor.goto_last_child();
+
+        loop {
+            if let Err(e) = cursor_eq(a, e) {
+                error = error.map_or(Some(e), |old| Some(old + e));
+                break;
+            }
+
+            if !e.cursor.goto_previous_sibling() {
+                while a.cursor.goto_previous_sibling() {
+                    let e = EqError::extra(
+                        a.node(),
+                        e.context,
+                        e.node().node.end_byte(),
+                        e.node().node.end_position(),
+                    );
+                    error = error.map_or(Some(e), |old| Some(old + e));
+                }
+                break;
+            } else if !a.cursor.goto_previous_sibling() {
+                while e.cursor.goto_previous_sibling() {
+                    let e = EqError::missing(
+                        a.context,
+                        a.node().node.end_byte(),
+                        a.node().node.end_position(),
+                        e.node(),
+                    );
+                    error = error.map_or(Some(e), |old| Some(old + e));
+                }
+                break;
+            }
+        }
+
+        a.cursor.goto_parent();
+        e.cursor.goto_parent();
+    }
+
+    error.map(|e| Err(e)).unwrap_or(Ok(()))
 }
