@@ -37,7 +37,7 @@ mod test {
 
     #[test]
     fn header() {
-        let m = Template::Match::from_node(crate::test::TEMPLATE_H_CTX.root());
+        let m = Template::Match::from_node(crate::test::input::TEMPLATE_H_CTX.root());
         let m = if m.len() == 1 {
             m.into_iter().next().unwrap()
         } else {

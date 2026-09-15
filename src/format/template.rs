@@ -98,7 +98,7 @@ mod test {
 
     #[test]
     fn header() {
-        let t = Template::from_buffer(crate::test::TEMPLATE_H_CTX.as_str())
+        let t = Template::from_buffer(crate::test::input::TEMPLATE_H_CTX.as_str())
             .expect("Failed to load template header");
 
         assert!(t.header.contains("@abigen:start"));

@@ -1,7 +1,7 @@
 use crate::{ApiFnArg, ApiFnDef, ApiTyperef, RefType};
 use std::{collections::HashMap, sync::LazyLock};
 
-pub static INTERPRETED_EXPECTED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
+pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
     HashMap::from_iter([
         (
             "config",
