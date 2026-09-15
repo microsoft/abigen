@@ -1,6 +1,5 @@
 use crate::{
-    AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template,
-    query::{FnDef, structured_query},
+    AbiConfig, AbiExceptionConfig, Api, ApiFnDef, Context, ContextNode, Template, query::{FnDef, structured_query}, test::actual::H_TEMPLATED,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -82,7 +81,7 @@ pub mod input {
     });
 
     pub static TEMPLATE_CPP: LazyLock<Template> = LazyLock::new(|| {
-        Template::from_buffer(TEMPLATE_H_CTX.as_str()).expect("Failed to interpret template impl")
+        Template::from_buffer(TEMPLATE_CPP_CTX.as_str()).expect("Failed to interpret template impl")
     });
 }
 
@@ -91,24 +90,24 @@ pub mod expected {
     pub use expected_interpreted::*;
     pub use expected_parsed::*;
 
-    pub static H_FULL: LazyLock<Context> = LazyLock::new(|| {
+    pub static H_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
         Context::from_file(CRATE_DIR.join("src/test/expected.h")).expect("Failed to parse input")
     });
 
-    pub static CPP_FULL: LazyLock<Context> = LazyLock::new(|| {
-        Context::from_file(CRATE_DIR.join("src/test/expected.cpp")).expect("Failed to parse input")
-    });
-
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-        HeaderDecl::Match::from_node(H_FULL.root())
+        HeaderDecl::Match::from_node(H_TEMPLATED.root())
             .into_iter()
             .map(|m| (m.name.as_str(), m.full))
             .collect()
     });
 
+    pub static CPP_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
+        Context::from_file(CRATE_DIR.join("src/test/expected.cpp")).expect("Failed to parse input")
+    });
+
     pub static CPP_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> =
         LazyLock::new(|| {
-            CodeDef::Match::from_node(CPP_FULL.root())
+            CodeDef::Match::from_node(CPP_TEMPLATED.root())
                 .into_iter()
                 .map(|m| (m.name.as_str(), m.full))
                 .collect()
@@ -133,14 +132,16 @@ pub mod actual {
             .collect()
     });
 
-    pub static H_FULL: LazyLock<Context> = LazyLock::new(|| {
-        let api = Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API");
-        Context::from(api.header(&CONFIG).to_string())
+    pub static API: LazyLock<Api> = LazyLock::new(|| {
+        Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API")
     });
 
-    pub static CPP_FULL: LazyLock<Context> = LazyLock::new(|| {
-        let api = Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API");
-        Context::from(api.code(&CONFIG).to_string())
+    pub static H_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
+        Context::from(input::TEMPLATE_H.header(&API, &CONFIG).to_string())
+    });
+
+    pub static H_FULL: LazyLock<Context> = LazyLock::new(|| {
+        Context::from(API.header(&CONFIG).to_string())
     });
 
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
@@ -148,6 +149,15 @@ pub mod actual {
             .into_iter()
             .map(|m| (m.name.as_str(), m.full))
             .collect()
+    });
+
+    pub static CPP_TEMPLATED: LazyLock<Context> = LazyLock::new(|| {
+        Context::from(input::TEMPLATE_CPP.code(&API, &CONFIG).to_string())
+    });
+
+    pub static CPP_FULL: LazyLock<Context> = LazyLock::new(|| {
+        let api = Api::from_buffer(input::CTX.as_str()).expect("Failed to populate API");
+        Context::from(api.code(&CONFIG).to_string())
     });
 
     pub static CPP_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> =
@@ -161,14 +171,14 @@ pub mod actual {
     #[test]
     #[ignore]
     fn print_h() {
-        println!("{}", H_FULL.root());
+        println!("{}", H_FULL.as_str());
         panic!()
     }
 
     #[test]
     #[ignore]
     fn print_cpp() {
-        println!("{}", CPP_FULL.root());
+        println!("{}", CPP_FULL.as_str());
         panic!()
     }
 }
@@ -192,6 +202,20 @@ pub fn collection_eq<A, E>(
     let unmatched: Vec<_> = expected.into_iter().collect();
 
     assert_eq!(unmatched, unexpected, "expected (left) != actual (right)");
+}
+
+#[test]
+fn header() {
+    actual::H_TEMPLATED.root()
+        .diff(&expected::H_TEMPLATED.root())
+        .expect("Mismatch");
+}
+
+#[test]
+fn code() {
+    actual::CPP_TEMPLATED.root()
+        .diff(&expected::CPP_TEMPLATED.root())
+        .expect("Mismatch");
 }
 
 macro_rules! gen_test(

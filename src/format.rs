@@ -4,36 +4,34 @@ pub use node::*;
 mod template;
 pub use template::*;
 
-use std::fmt::{self, Display, Write};
+use std::fmt::{self, Display};
 
-pub(crate) struct Delimited<const D: char>(String);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct Delimited<const D: char> {
+    pub parts: Vec<String>,
+}
 
 impl<const D: char, I> FromIterator<I> for Delimited<D>
 where
     I: Display,
 {
     fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
-        let mut s = String::new();
-        let mut iter = iter.into_iter();
-        if let Some(i) = iter.next() {
-            write!(s, "{i}").unwrap();
+        Self {
+            parts: iter.into_iter().map(|i| i.to_string()).collect(),
         }
-        while let Some(i) = iter.next() {
-            write!(s, "{D}{i}").unwrap();
-        }
-        Self(s)
     }
 }
 
 impl<const D: char> Display for Delimited<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl<const D: char> Into<String> for Delimited<D> {
-    fn into(self) -> String {
-        self.0
+        let mut iter = self.parts.iter();
+        if let Some(p) = iter.next() {
+            write!(f, "{p}")?;
+        }
+        while let Some(p) = iter.next() {
+            write!(f, "{D}{p}")?;
+        }
+        Ok(())
     }
 }
 

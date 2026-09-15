@@ -28,6 +28,18 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
         }
     }
 }
+impl Ord for ApiFnDef {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let ours = self.fqns.iter().chain([&self.name].into_iter());
+        let theirs = other.fqns.iter().chain([&other.name].into_iter());
+        ours.cmp(theirs)
+    }
+}
+impl PartialOrd for ApiFnDef {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 impl ApiFnDef {
     pub fn header(&self, config: &AbiConfig) -> impl Display {

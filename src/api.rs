@@ -1,6 +1,7 @@
 use std::{
     fmt::{self, Display},
     path::Path,
+    collections::HashSet,
 };
 
 use crate::{AbiConfig, Context, Error, query::FnDef};
@@ -22,7 +23,7 @@ const POST: &'static str = r#"
 
 #[derive(Debug, Clone, Default)]
 pub struct Api {
-    pub functions: Vec<ApiFnDef>,
+    pub functions: HashSet<ApiFnDef>,
 }
 
 impl Api {
@@ -36,7 +37,7 @@ impl Api {
 
         let ctx = Context::from_buffer(header)?;
         for m in FnDef::Match::from_node(ctx.root()) {
-            s.functions.push(ApiFnDef::from(&m));
+            s.functions.insert(ApiFnDef::from(&m));
         }
 
         Ok(s)
@@ -44,8 +45,11 @@ impl Api {
 
     pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
+            let mut fns: Vec<_> = self.functions.iter().collect();
+            fns.sort();
+
             writeln!(f, "{PRE}")?;
-            for func in &self.functions {
+            for func in fns {
                 writeln!(f, "{}", func.header(config))?;
             }
             writeln!(f, "{POST}")
@@ -54,8 +58,11 @@ impl Api {
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
+            let mut fns: Vec<_> = self.functions.iter().collect();
+            fns.sort();
+
             writeln!(f, "{PRE}")?;
-            for func in &self.functions {
+            for func in fns {
                 writeln!(f, "{}", func.code(config))?;
             }
             writeln!(f, "{POST}")
