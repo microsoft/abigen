@@ -67,7 +67,7 @@ impl ApiFnDef {
         let self_arg = ApiFnArg::self_arg(self.immut, self.inst_handle_t().to_string());
         args.insert(0, Cow::Owned(self_arg));
 
-        if let Some(o) = ApiFnArg::out_arg(self.ret.typ.as_str()) {
+        if let Some(o) = ApiFnArg::out_arg(&self.ret) {
             args.push(Cow::Owned(o));
         }
 
@@ -120,9 +120,10 @@ impl ApiFnDef {
             let args = self.args.iter()
                 .map(|a| a.deref())
                 .collect::<Delimited<','>>();
-            
-            if !self.ret.is_void() {
-                writeln!(f, "*out = self->{name}({args});",
+
+            if let Some(o) = ApiFnArg::out_arg(&self.ret) {
+                writeln!(f, "{out} = self->{name}({args});",
+                    out = o.deref(),
                     name = self.name,
                 )
             } else {
@@ -173,13 +174,17 @@ impl ApiFnArg {
         }
     }
 
-    fn out_arg(t: &str) -> Option<Self> {
-        if t != "void" {
+    fn out_arg(t: &ApiTyperef) -> Option<Self> {
+        if !t.is_void() {
             Some(Self {
                 typ: ApiTyperef {
                     is_const: false,
-                    typ: t.into(),
-                    relation: RefType::OutReference,
+                    typ: t.typ.clone(),
+                    relation: if let RefType::Pointer(d) = t.relation {
+                        RefType::Pointer(d+1)
+                    } else {
+                        RefType::OutReference
+                    }
                 },
                 name: "out".to_string(),
             })
