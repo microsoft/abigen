@@ -4,42 +4,72 @@ pub use node::*;
 mod template;
 pub use template::*;
 
-use std::fmt::{self, Display};
+use std::fmt::{self, Display, Write};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct Delimited<const D: char> {
-    pub parts: Vec<String>,
-}
+macro_rules! fmt_wrap(
+    ($self:ident.$fn:ident $(, $($arg:expr),*)? $(,)?) => {
+        std::fmt::from_fn(move |f| $self.$fn(f $(, $($arg),*)?))
+    };
+    ($fn:expr $(, $($arg:expr),*)? $(,)?) => {
+        std::fmt::from_fn(|f| $fn(f $(, $($arg),*)?))
+    };
+);
+pub(crate) use fmt_wrap;
 
-impl<const D: char, I> FromIterator<I> for Delimited<D>
-where
-    I: Display,
-{
-    fn from_iter<T: IntoIterator<Item = I>>(iter: T) -> Self {
-        Self {
-            parts: iter.into_iter().map(|i| i.to_string()).collect(),
-        }
+pub(crate) fn delimited<T: Display>(
+    f: &mut fmt::Formatter<'_>,
+    d: &str,
+    mut parts: impl Iterator<Item = T>,
+) -> fmt::Result {
+    if let Some(part) = parts.next() {
+        write!(f, "{part}")?;
     }
-}
-
-impl<const D: char> Display for Delimited<D> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut iter = self.parts.iter();
-        if let Some(p) = iter.next() {
-            write!(f, "{p}")?;
-        }
-        while let Some(p) = iter.next() {
-            write!(f, "{D}{p}")?;
-        }
-        Ok(())
+    while let Some(part) = parts.next() {
+        write!(f, "{d}{part}")?;
     }
+    Ok(())
 }
 
-pub(crate) fn repeat(s: &str, i: usize) -> impl std::fmt::Display {
-    fmt::from_fn(move |f| {
-        for _ in 0..i {
-            write!(f, "{s}")?
-        }
-        Ok(())
-    })
+pub(crate) fn repeat(f: &mut fmt::Formatter<'_>, s: &str, i: usize) -> fmt::Result {
+    for _ in 0..i {
+        write!(f, "{s}")?
+    }
+    Ok(())
+}
+
+pub(crate) fn snake_case<T: AsRef<str>>(
+    f: &mut fmt::Formatter<'_>,
+    mut parts: impl Iterator<Item = T>,
+) -> fmt::Result {
+    if let Some(part) = parts.next() {
+        write!(f, "{}", part.as_ref().to_lowercase())?;
+    }
+    while let Some(part) = parts.next() {
+        write!(f, "_{}", part.as_ref().to_lowercase())?;
+    }
+    Ok(())
+}
+
+pub(crate) fn pascal_case<T: AsRef<str>>(mut parts: impl Iterator<Item = T>) -> String {
+    let mut out = String::new();
+
+    if let Some(part) = parts.next() {
+        let _ = write!(out, "{}", part.as_ref());
+    }
+    while let Some(part) = parts.next() {
+        let _ = write!(out, "_{}", part.as_ref().to_lowercase());
+    }
+
+    out
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn snake_case() {
+        assert_eq!(
+            fmt_wrap!(super::snake_case, ["x", "y", "MyClass"].iter()).to_string(),
+            "x_y_myclass"
+        );
+    }
 }
