@@ -4,13 +4,27 @@ use std::{collections::HashMap, sync::LazyLock};
 pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::new(|| {
     HashMap::from_iter([
         (
+            "do_something",
+            FnDef::Literal {
+                ret: FnRetType::Literal {
+                    q: None,
+                    t: "int",
+                    r: vec![],
+                },
+                decl: FnDecl::Literal {
+                    name: "do_something",
+                    args: vec![],
+                    immut: None,
+                    noexcept: None,
+                },
+            },
+        ),
+        (
             "config",
             FnDef::Literal {
-                class: "MyClass",
-                subclass: vec![],
                 ret: FnRetType::Literal {
                     q: Some("const"),
-                    t: "Config",
+                    t: "z::Config",
                     r: vec![FnRetRef::Literal { r: "&" }],
                 },
                 decl: FnDecl::Literal {
@@ -24,8 +38,6 @@ pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::n
         (
             "set_config",
             FnDef::Literal {
-                class: "MyClass",
-                subclass: vec![],
                 ret: FnRetType::Literal {
                     q: None,
                     t: "void",
@@ -37,7 +49,7 @@ pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::n
                         name: "config",
                         typ: FnArgType::Literal {
                             q: Some("const"),
-                            t: "Config",
+                            t: "z::Config",
                             r: vec![FnArgRef::Literal { r: "&" }],
                         },
                     }],

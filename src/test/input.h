@@ -1,14 +1,25 @@
 #pragma once
 
-struct Config;
+namespace x::y
+{
+    namespace z
+    {
+        struct Config
+        {
+            float a;
+            float b;
+            float c;
+        };
+    }
 
-class MyClass {
-public:
-    class SubClass {
+    class MyClass {
     public:
-        int do_something();
+        class SubClass {
+        public:
+            int do_something();
+        };
+
+        const z::Config& config() const noexcept;
+        void set_config(const z::Config& config);
     };
-    
-    const Config& config() const noexcept;
-    void set_config(const Config& config);
-};
+}

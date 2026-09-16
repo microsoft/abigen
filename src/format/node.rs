@@ -1,4 +1,4 @@
-use crate::{ContextCursor, ContextNode, indent};
+use crate::{ContextCursor, ContextNode, repeat};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -18,6 +18,8 @@ fn sanitize(item: char) -> char {
 
 static FMT_DISPLAY_CONFIG: RwLock<NodeDisplayConfig> =
     RwLock::new(NodeDisplayConfig::const_default());
+
+const INDENT: &'static str = "  ";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeDisplayConfig {
@@ -70,7 +72,7 @@ pub(crate) fn print_tree<'t>(
     writeln!(
         f,
         "{indent}{node}",
-        indent = indent(cursor.cursor.depth()),
+        indent = repeat(INDENT, cursor.cursor.depth() as usize),
         node = NodeFormat {
             node: cursor.node(),
             field: cursor.cursor.field_name(),
@@ -83,7 +85,7 @@ pub(crate) fn print_tree<'t>(
         writeln!(
             f,
             "{indent}+{c} children",
-            indent = indent(config.max_depth as u32),
+            indent = repeat(INDENT, config.max_depth),
             c = cursor.node().node.named_child_count(),
         )?;
     } else if cursor.cursor.goto_first_child() {

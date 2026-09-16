@@ -35,10 +35,10 @@ impl<const D: char> Display for Delimited<D> {
     }
 }
 
-pub(crate) fn indent(i: u32) -> impl std::fmt::Display {
+pub(crate) fn repeat(s: &str, i: usize) -> impl std::fmt::Display {
     fmt::from_fn(move |f| {
         for _ in 0..i {
-            write!(f, "  ")?
+            write!(f, "{s}")?
         }
         Ok(())
     })
