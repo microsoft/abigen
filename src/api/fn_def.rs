@@ -1,10 +1,18 @@
 use crate::{
-    AbiConfig,
+    AbiConfig, LANG,
     format::Delimited,
     query::{FnArg, FnArgType, FnDef, FnRetType},
 };
-use std::fmt::{self, Display};
 use std::{borrow::Cow, hash::Hash};
+use std::{
+    fmt::{self, Display},
+    sync::LazyLock,
+};
+
+static K_CLASS: LazyLock<u16> = LazyLock::new(|| LANG.id_for_node_kind("class_specifier", true));
+static K_NS: LazyLock<u16> = LazyLock::new(|| LANG.id_for_node_kind("namespace_definition", true));
+static K_NESTED_NS: LazyLock<u16> =
+    LazyLock::new(|| LANG.id_for_node_kind("nested_namespace_specifier", true));
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -18,17 +26,42 @@ pub struct ApiFnDef {
 
 impl From<&FnDef::Match<'_>> for ApiFnDef {
     fn from(value: &FnDef::Match) -> Self {
-        let mut fqns = vec![value.class.as_str().to_string()];
+        let mut fqns = vec![];
+        let mut parent = value.decl.name;
+        while let Some(p) = parent.parent() {
+            parent = p;
+            if parent.node.kind_id() == *K_CLASS
+                && let Some(name) = parent.child_by_field_name("name")
+            {
+                // class definition
+                fqns.insert(0, name.as_str().to_string());
+            } else if parent.node.kind_id() == *K_NS
+                && let Some(name) = parent.child_by_field_name("name")
+            {
+                // namespace definition
+                if name.node.kind_id() == *K_NESTED_NS {
+                    // multi-part namespace name, i.e. x::y
+                    for (i, part) in name.named_children(&mut name.walk()).enumerate() {
+                        fqns.insert(i, part.as_str().to_string());
+                    }
+                } else {
+                    // single-part namespace name
+                    fqns.insert(0, name.as_str().to_string());
+                }
+            }
+        }
+
         Self {
             ret: ApiTyperef::from(&value.ret),
             name: value.decl.name.as_str().to_string(),
             fqns,
-            args: value.decl.args.iter().map(|a| a.into()).collect::<Vec<_>>(),
+            args: value.decl.args.iter().map(|a| a.into()).collect(),
             noexcept: value.decl.noexcept.is_some(),
             immut: value.decl.immut.is_some(),
         }
     }
 }
+
 impl Ord for ApiFnDef {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let ours = self.fqns.iter().chain([&self.name].into_iter());
@@ -36,6 +69,7 @@ impl Ord for ApiFnDef {
         ours.cmp(theirs)
     }
 }
+
 impl PartialOrd for ApiFnDef {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))

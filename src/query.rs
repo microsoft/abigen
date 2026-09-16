@@ -150,7 +150,6 @@ macro_rules! structured_query {
             }
         }
 
-
         #[derive(Clone, std::hash::Hash)]
         pub struct Match<'tree> {
             $( $(#[$f_meta])* pub $field : $crate::query::field_t!($field_t), )+

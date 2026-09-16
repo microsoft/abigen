@@ -3,27 +3,19 @@ use crate::query::structured_query;
 structured_query! {
     name: pub FnDef,
     fields: {
-        class: _,
-        subclass: [FnDef],
         ret: FnRetType,
         decl: FnDecl,
     },
     query: r#"
         (class_specifier
-            name: (type_identifier) @class
             body: (field_declaration_list
                 ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
                 .
                 (field_declaration)*
                 .
-                [
-                    (field_declaration
-                        declarator: (_) @decl
-                    ) @ret
-                    (field_declaration
-                        type: (class_specifier) @subclass
-                    )
-                ]
+                (field_declaration
+                    declarator: (_) @decl
+                ) @ret
             )
         )
     "#
