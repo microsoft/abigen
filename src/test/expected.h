@@ -16,9 +16,9 @@ enum struct Result
 extern "C" {
 #endif
 
-Result x_y_myclass_subclass_do_something(x_y_MyClass_SubClass* self, int* out);
-Result x_y_myclass_config(const x_y_MyClass* self, z::Config** out);
-Result x_y_myclass_set_config(x_y_MyClass* self, const z::Config* config);
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out);
+Result x_y_myclass_config(const XYMyClass* self, z::Config** out);
+Result x_y_myclass_set_config(XYMyClass* self, const z::Config* config);
 
 #ifdef __cplusplus
 } // extern "C"

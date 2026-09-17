@@ -1,6 +1,7 @@
 use crate::{
-    AbiConfig, LANG,
+    AbiConfig, LANG, TypeName,
     format::{self, fmt_wrap},
+    name_concat,
     query::{FnArg, FnArgType, FnDef, FnRetType},
 };
 use std::{borrow::Cow, hash::Hash};
@@ -18,7 +19,7 @@ static K_NESTED_NS: LazyLock<u16> =
 pub struct ApiFnDef {
     pub ret: ApiType,
     pub name: String,
-    pub fqns: Vec<String>,
+    pub fqns: TypeName,
     pub args: Vec<ApiFnArg>,
     pub noexcept: bool,
     pub is_const: bool,
@@ -26,7 +27,7 @@ pub struct ApiFnDef {
 
 impl From<&FnDef::Match<'_>> for ApiFnDef {
     fn from(value: &FnDef::Match) -> Self {
-        let mut fqns = vec![];
+        let mut fqns = TypeName::new();
         let mut parent = value.decl.name;
         while let Some(p) = parent.parent() {
             parent = p;
@@ -64,8 +65,8 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
 
 impl Ord for ApiFnDef {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ours = self.fqns.iter().chain([&self.name].into_iter());
-        let theirs = other.fqns.iter().chain([&other.name].into_iter());
+        let ours = self.fqns.iter().chain([self.name.as_str()].into_iter());
+        let theirs = other.fqns.iter().chain([other.name.as_str()].into_iter());
         ours.cmp(theirs)
     }
 }
@@ -97,12 +98,12 @@ impl ApiFnDef {
     }
 
     fn name_c(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format::snake_case(f, self.fqns.iter().chain([&self.name].into_iter()))
+        name_concat!(self.fqns.iter(), [self.name.as_str()]).snake_case(f)
     }
 
     /// The name of the C type that opaquely stands in for the C++ type
     fn inst_handle_t(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format::delimited(f, "_", self.fqns.iter())
+        self.fqns.pascal_case(f)
     }
 
     fn args_c<'a>(&'a self) -> impl Iterator<Item = Cow<'a, ApiFnArg>> {
@@ -147,6 +148,7 @@ impl ApiFnDef {
             out.deref(f)?;
             write!(f, " = ")?;
             out.typ.default_value(f, false)?;
+            writeln!(f, ";")?;
         }
 
         writeln!(f, "try {{ {} }}", fmt_wrap!(self.body_exec, config))?;
@@ -310,7 +312,8 @@ impl ApiType {
 
     pub fn default_value(&self, f: &mut fmt::Formatter<'_>, is_out: bool) -> fmt::Result {
         write!(f, "{} ", self.typ)?;
-        self.relation.decl(f, is_out)
+        self.relation.decl(f, is_out)?;
+        write!(f, "{{}}")
     }
 }
 

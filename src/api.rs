@@ -9,6 +9,9 @@ use crate::{AbiConfig, Context, Error, query::FnDef};
 mod fn_def;
 pub use fn_def::*;
 
+mod typename;
+pub use typename::*;
+
 const PRE: &'static str = r#"
 #ifdef __cplusplus
 extern "C" {

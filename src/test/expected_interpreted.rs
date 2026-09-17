@@ -1,4 +1,4 @@
-use crate::{ApiFnArg, ApiFnDef, ApiType, TypeRelation};
+use crate::{ApiFnArg, ApiFnDef, ApiType, TypeName, TypeRelation};
 use std::{collections::HashMap, sync::LazyLock};
 
 pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
@@ -7,7 +7,7 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
             "do_something",
             ApiFnDef {
                 name: "do_something".into(),
-                fqns: vec!["x".into(), "y".into(), "MyClass".into(), "SubClass".into()],
+                fqns: TypeName::from_iter(["x", "y", "MyClass", "SubClass"]),
                 ret: ApiType {
                     typ: "int".into(),
                     relation: TypeRelation::Value,
@@ -22,7 +22,7 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
             "config",
             ApiFnDef {
                 name: "config".into(),
-                fqns: vec!["x".into(), "y".into(), "MyClass".into()],
+                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
                 ret: ApiType {
                     typ: "z::Config".into(),
                     relation: TypeRelation::Ref,
@@ -37,7 +37,7 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
             "set_config",
             ApiFnDef {
                 name: "set_config".into(),
-                fqns: vec!["x".into(), "y".into(), "MyClass".into()],
+                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
                 ret: ApiType::void(),
                 args: vec![ApiFnArg {
                     name: "config".into(),

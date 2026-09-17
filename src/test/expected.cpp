@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-Result x_y_myclass_subclass_do_something(x_y_MyClass_SubClass* self, int* out)
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out)
 {
     if (self == nullptr) {
         return Result::ArgumentNull;
@@ -24,7 +24,7 @@ Result x_y_myclass_subclass_do_something(x_y_MyClass_SubClass* self, int* out)
     return Result::Success;
 }
 
-Result x_y_myclass_config(const x_y_MyClass* self, z::Config** out)
+Result x_y_myclass_config(const XYMyClass* self, z::Config** out)
 {
     if (self == nullptr) {
         return Result::ArgumentNull;
@@ -42,7 +42,7 @@ Result x_y_myclass_config(const x_y_MyClass* self, z::Config** out)
     return Result::Success;
 }
 
-Result x_y_myclass_set_config(x_y_MyClass* self, const z::Config* config)
+Result x_y_myclass_set_config(XYMyClass* self, const z::Config* config)
 {
     if (self == nullptr) {
         return Result::ArgumentNull;
