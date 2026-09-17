@@ -1,19 +1,13 @@
 use crate::{
-    AbiConfig, LANG, TypeName,
+    AbiConfig, TypeName,
     format::{self, fmt_wrap},
     name_concat,
-    query::{FnArg, FnArgType, FnDef, FnRetType},
+    query::{k, f, FnArg, FnArgType, FnDef, FnRetType},
 };
 use std::{borrow::Cow, hash::Hash};
 use std::{
     fmt::{self, Display},
-    sync::LazyLock,
 };
-
-static K_CLASS: LazyLock<u16> = LazyLock::new(|| LANG.id_for_node_kind("class_specifier", true));
-static K_NS: LazyLock<u16> = LazyLock::new(|| LANG.id_for_node_kind("namespace_definition", true));
-static K_NESTED_NS: LazyLock<u16> =
-    LazyLock::new(|| LANG.id_for_node_kind("nested_namespace_specifier", true));
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -31,16 +25,16 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
         let mut parent = value.decl.name;
         while let Some(p) = parent.parent() {
             parent = p;
-            if parent.node.kind_id() == *K_CLASS
-                && let Some(name) = parent.child_by_field_name("name")
+            if parent.node.kind_id() == *k::CLASS
+                && let Some(name) = parent.child_by_field_id(*f::NAME)
             {
                 // class definition
                 fqns.insert(0, name.as_str().to_string());
-            } else if parent.node.kind_id() == *K_NS
-                && let Some(name) = parent.child_by_field_name("name")
+            } else if parent.node.kind_id() == *k::NS
+                && let Some(name) = parent.child_by_field_id(*f::NAME)
             {
                 // namespace definition
-                if name.node.kind_id() == *K_NESTED_NS {
+                if name.node.kind_id() == *k::NESTED_NS {
                     // multi-part namespace name, i.e. x::y
                     for (i, part) in name.named_children(&mut name.walk()).enumerate() {
                         fqns.insert(i, part.as_str().to_string());
@@ -124,7 +118,7 @@ impl ApiFnDef {
         write!(f, "{} ", config.exception.value_type)?;
         self.name_c(f)?;
         write!(f, "(")?;
-        format::delimited(f, ", ", self.args_c().map(|a| fmt_wrap!(a.decl)))?;
+        format::delimited(f, ", ", self.args_c().map(|a| fmt_wrap!(a.decl, config)))?;
         write!(f, ")")
     }
 
@@ -147,7 +141,7 @@ impl ApiFnDef {
         if let Some(out) = ApiFnArg::out_arg(&self.ret) {
             out.deref(f)?;
             write!(f, " = ")?;
-            out.typ.default_value(f, false)?;
+            out.typ.default_value(f, config, false)?;
             writeln!(f, ";")?;
         }
 
@@ -210,7 +204,7 @@ impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
 }
 
 impl ApiFnArg {
-    fn self_arg(is_const: bool, t: impl Into<String>) -> Self {
+    fn self_arg(is_const: bool, t: impl Into<TypeName>) -> Self {
         Self {
             typ: ApiType {
                 is_const,
@@ -251,8 +245,8 @@ impl ApiFnArg {
         Ok(())
     }
 
-    fn decl(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.typ.decl(f, self.is_out)?;
+    fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
+        self.typ.decl(f, config, self.is_out)?;
         write!(f, " {}", self.name)
     }
 
@@ -264,7 +258,7 @@ impl ApiFnArg {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ApiType {
-    pub typ: String,
+    pub typ: TypeName,
     pub is_const: bool,
     pub relation: TypeRelation,
 }
@@ -273,7 +267,7 @@ impl From<&FnArgType::Match<'_>> for ApiType {
     fn from(value: &FnArgType::Match<'_>) -> Self {
         Self {
             is_const: value.q.is_some(),
-            typ: value.t.as_str().to_string(),
+            typ: value.t.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
     }
@@ -283,7 +277,7 @@ impl From<&FnRetType::Match<'_>> for ApiType {
     fn from(value: &FnRetType::Match<'_>) -> Self {
         Self {
             is_const: value.q.is_some(),
-            typ: value.t.as_str().to_string(),
+            typ: value.t.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
     }
@@ -292,28 +286,38 @@ impl From<&FnRetType::Match<'_>> for ApiType {
 impl ApiType {
     pub fn void() -> Self {
         Self {
-            typ: "void".to_string(),
+            typ: TypeName::void().clone(),
             is_const: false,
             relation: TypeRelation::Value,
         }
     }
 
     pub fn is_void(&self) -> bool {
-        self.typ == "void"
+        &self.typ == TypeName::void()
     }
 
-    pub fn decl(&self, f: &mut fmt::Formatter<'_>, is_out: bool) -> fmt::Result {
+    pub fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_out: bool) -> fmt::Result {
         if self.is_const {
             write!(f, "const ")?;
         }
-        write!(f, "{}", self.typ)?;
+        self.typ_c(f, config)?;
         self.relation.decl(f, is_out)
     }
 
-    pub fn default_value(&self, f: &mut fmt::Formatter<'_>, is_out: bool) -> fmt::Result {
-        write!(f, "{} ", self.typ)?;
+    pub fn default_value(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_out: bool) -> fmt::Result {
+        self.typ_c(f, config)?;
         self.relation.decl(f, is_out)?;
         write!(f, "{{}}")
+    }
+
+    fn typ_c(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
+        if config.builtin_types.contains(&self.typ) {
+            self.typ.snake_case(f)
+        } else if let Some(t) = config.resolved_types.get(&self.typ) {
+            t.pascal_case(f)
+        } else {
+            self.typ.pascal_case(f)
+        }
     }
 }
 

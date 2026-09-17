@@ -1,8 +1,40 @@
-use std::fmt;
+use std::{fmt::{self, Display}, sync::LazyLock};
+use crate::query::{k, f};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, std::hash::Hash)]
+static VOID_T: LazyLock<TypeName> = LazyLock::new(|| {
+    TypeName::from("void")
+});
+
+#[derive(Debug, Clone, Copy)]
+pub struct TypeParseError {
+    pub kind: &'static str,
+}
+
+impl TypeParseError {
+    pub fn new(kind: &'static str) -> Self {
+        Self { kind }
+    }
+}
+
+impl Display for TypeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Failed to parse type from node. Expected an identifier, got '{}'", self.kind)
+    }
+}
+impl std::error::Error for TypeParseError {}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, std::hash::Hash, serde::Serialize, serde::Deserialize)]
+#[serde(from = "&str")]
 pub struct TypeName {
     parts: Vec<String>,
+}
+
+impl<T: AsRef<str>> From<T> for TypeName {
+    fn from(value: T) -> Self {
+        Self {
+            parts: value.as_ref().split("::").map(|p| String::from(p)).collect(),
+        }
+    }
 }
 
 impl<T: Into<String>> FromIterator<T> for TypeName {
@@ -22,8 +54,41 @@ impl IntoIterator for TypeName {
 }
 
 impl TypeName {
+    pub fn void() -> &'static Self {
+        &VOID_T
+    }
+
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn from_node(node: ContextNode<'_>) -> Result<Self, TypeParseError> {
+        fn collect(name: ContextNode<'_>, out: &mut Vec<String>) -> Result<(), TypeParseError> {
+            if name.node.kind_id() == *k::TYPE_ID {
+                out.push(name.as_str().to_string());
+                Ok(())
+            }
+            else if name.node.kind_id() == *k::QUALIFIED_ID {
+                let scope = name.child_by_field_id(*f::SCOPE)
+                    .ok_or(TypeParseError::new(name.node.kind()))?;
+                let name = name.child_by_field_id(*f::NAME)
+                    .ok_or(TypeParseError::new(name.node.kind()))?;
+
+                if scope.node.kind_id() == *k::NS_ID {
+                    out.push(scope.as_str().to_string());
+                } else {
+                    return Err(TypeParseError::new(scope.node.kind()));
+                }
+
+                collect(name, out)
+            } else {
+                Err(TypeParseError::new(name.node.kind()))
+            }
+        }
+
+        let mut parts = vec![];
+        collect(node, &mut parts)?;
+        Ok(Self { parts })
     }
 
     pub fn push(&mut self, part: impl Into<String>) {
@@ -72,6 +137,8 @@ macro_rules! name_concat(
     };
 );
 pub(crate) use name_concat;
+
+use crate::ContextNode;
 
 #[cfg(test)]
 mod test {

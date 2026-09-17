@@ -32,7 +32,7 @@ macro_rules! field_t (
     (_) => {
         $crate::ContextNode<'tree>
     };
-    (Option) => {
+    (?) => {
         Option<$crate::ContextNode<'tree>>
     };
     ([_]) => {
@@ -50,7 +50,7 @@ macro_rules! field_val (
     ($query:expr, $ctx:ident, $m:ident, $f:ident, _) => {
         $m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n))
     };
-    ($query:expr, $ctx:ident, $m:ident, $f:ident, Option) => {
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, ?) => {
         Some($m.nodes_for_capture_index($query.$f).next().map(|n| $ctx.wrap(n)))
     };
     ($query:expr, $ctx:ident, $m:ident, $f:ident, [_]) => {
@@ -74,7 +74,7 @@ macro_rules! test_t (
     (_) => {
         &'tree str
     };
-    (Option) => {
+    (?) => {
         Option<&'tree str>
     };
     ([_]) => {
@@ -92,7 +92,7 @@ macro_rules! test_eq (
     ($self:ident, $other:ident, $f:ident, _) => {
         $other.$f.as_str() == $self.$f
     };
-    ($self:ident, $other:ident, $f:ident, Option) => {
+    ($self:ident, $other:ident, $f:ident, ?) => {
         (match ($self.$f, $other.$f) {
             (Some(s), Some(o)) => o.as_str() == s,
             (None, None) => true,
@@ -235,7 +235,7 @@ pub mod test {
         name: pub Q,
         fields: {
             typ: _,
-            size: Option,
+            size: ?,
         },
         query: r#"
             (declaration

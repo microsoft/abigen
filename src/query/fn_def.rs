@@ -1,5 +1,29 @@
 use crate::query::structured_query;
 
+pub mod k {
+    macro_rules! kind_id (
+        ($vis:vis $name:ident, $kind:literal) => {
+            $vis static $name: std::sync::LazyLock<u16> = std::sync::LazyLock::new(|| $crate::LANG.id_for_node_kind($kind, true));
+        }
+    );
+    kind_id!(pub CLASS, "class_specifier");
+    kind_id!(pub NS, "namespace_definition");
+    kind_id!(pub NESTED_NS, "nested_namespace_specifier");
+    kind_id!(pub QUALIFIED_ID, "qualified_identifier");
+    kind_id!(pub NS_ID, "namespace_identifier");
+    kind_id!(pub TYPE_ID, "type_identifier");
+}
+
+pub mod f {
+    macro_rules! field_id (
+        ($vis:vis $name:ident, $field:literal) => {
+            $vis static $name: std::sync::LazyLock<u16> = std::sync::LazyLock::new(|| $crate::LANG.field_id_for_name($field).unwrap().into());
+        }
+    );
+    field_id!(pub SCOPE, "scope");
+    field_id!(pub NAME, "name");
+}
+
 structured_query! {
     name: pub FnDef,
     fields: {
@@ -24,7 +48,7 @@ structured_query! {
 structured_query! {
     name: pub FnRetType,
     fields: {
-        q: Option,
+        q: ?,
         t: _,
         r: [FnRetRef],
     },
@@ -62,8 +86,8 @@ structured_query! {
     fields: {
         name: _,
         args: [FnArg],
-        immut: Option,
-        noexcept: Option,
+        immut: ?,
+        noexcept: ?,
     },
     query: r#"
         (function_declarator
@@ -96,7 +120,7 @@ structured_query! {
 structured_query! {
     name: pub FnArgType,
     fields: {
-        q: Option,
+        q: ?,
         t: _,
         r: [FnArgRef],
     },

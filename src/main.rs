@@ -55,7 +55,6 @@ enum OutputType {
     #[default]
     Null,
     Stdout,
-    Stderr,
     File(PathBuf),
 }
 
@@ -64,7 +63,6 @@ impl From<&str> for OutputType {
         match value {
             "null" => Self::Null,
             "stdout" => Self::Stdout,
-            "stderr" => Self::Stderr,
             p => Self::File(PathBuf::from(p)),
         }
     }
@@ -75,7 +73,6 @@ impl Write for OutputType {
         match self {
             Self::Null => Ok(buf.len()),
             Self::Stdout => std::io::stdout().write(buf),
-            Self::Stderr => std::io::stderr().write(buf),
             Self::File(p) => std::fs::write(p, buf).map(|_| buf.len()),
         }
     }
@@ -118,6 +115,7 @@ fn main() {
     if let Some(p) = args.config_file {
         let buf = std::fs::read(p).expect("Failed to read config file");
         config = toml::from_slice(&buf).expect("Failed to parse config file");
+        config = config.with_defaults();
     }
 
     // apply config options

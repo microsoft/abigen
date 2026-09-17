@@ -1,9 +1,34 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+use crate::TypeName;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AbiConfig {
+    pub resolved_types: HashMap<TypeName, TypeName>,
+    pub builtin_types: HashSet<TypeName>,
     pub exception: AbiExceptionConfig,
+}
+
+impl Default for AbiConfig {
+    fn default() -> Self {
+        Self {
+            resolved_types: HashMap::new(),
+            builtin_types: ["int", "char", "float", "double"].into_iter().map(|t| t.into()).collect(),
+            exception: AbiExceptionConfig::default(),
+        }
+    }
+}
+
+impl AbiConfig {
+    pub fn with_defaults(self) -> Self {
+        let mut default = Self::default();
+        default.resolved_types.extend(self.resolved_types);
+        default.builtin_types.extend(self.builtin_types);
+        default.exception = self.exception;
+        default
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

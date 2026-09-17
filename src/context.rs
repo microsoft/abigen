@@ -125,6 +125,12 @@ impl<'t> ContextNode<'t> {
             .map(|c| self.context.wrap(c))
     }
 
+    pub fn child_by_field_id(&self, field_id: u16) -> Option<Self> {
+        self.node
+            .child_by_field_id(field_id)
+            .map(|c| self.context.wrap(c))
+    }
+
     pub fn parent(&self) -> Option<Self> {
         self.node.parent().map(|p| self.context.wrap(p))
     }

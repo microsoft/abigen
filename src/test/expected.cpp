@@ -24,7 +24,7 @@ Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out)
     return Result::Success;
 }
 
-Result x_y_myclass_config(const XYMyClass* self, z::Config** out)
+Result x_y_myclass_config(const XYMyClass* self, XYZConfig** out)
 {
     if (self == nullptr) {
         return Result::ArgumentNull;
@@ -32,7 +32,7 @@ Result x_y_myclass_config(const XYMyClass* self, z::Config** out)
     if (out == nullptr) {
         return Result::ArgumentNull;
     }
-    *out = z::Config*{};
+    *out = XYZConfig*{};
     try {
         *out = self->config();
     }
@@ -42,7 +42,7 @@ Result x_y_myclass_config(const XYMyClass* self, z::Config** out)
     return Result::Success;
 }
 
-Result x_y_myclass_set_config(XYMyClass* self, const z::Config* config)
+Result x_y_myclass_set_config(XYMyClass* self, const XYZConfig* config)
 {
     if (self == nullptr) {
         return Result::ArgumentNull;
