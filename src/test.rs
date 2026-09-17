@@ -17,8 +17,7 @@ pub static CRATE_DIR: LazyLock<PathBuf> =
     LazyLock::new(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
-    let buf = std::fs::read(CRATE_DIR.join("src/test/config.toml"))
-        .expect("Failed to read config");
+    let buf = std::fs::read(CRATE_DIR.join("src/test/config.toml")).expect("Failed to read config");
     toml::from_slice(&buf).expect("Failed to parse config")
 });
 
@@ -261,5 +260,6 @@ macro_rules! gen_test(
     };
 );
 
-gen_test!(config, myclass_config);
-gen_test!(set_config, myclass_set_config);
+gen_test!(do_something, x_y_myclass_subclass_do_something);
+gen_test!(config, x_y_myclass_config);
+gen_test!(set_config, x_y_myclass_set_config);

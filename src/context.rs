@@ -110,6 +110,31 @@ impl<'t> ContextNode<'t> {
             .map(|c| self.context.wrap(c))
     }
 
+    pub fn named_children(
+        &self,
+        cursor: &mut ContextCursor<'t>,
+    ) -> impl ExactSizeIterator<Item = Self> {
+        self.node
+            .named_children(&mut cursor.cursor)
+            .map(|c| self.context.wrap(c))
+    }
+
+    pub fn child_by_field_name(&self, field: &str) -> Option<Self> {
+        self.node
+            .child_by_field_name(field)
+            .map(|c| self.context.wrap(c))
+    }
+
+    pub fn child_by_field_id(&self, field_id: u16) -> Option<Self> {
+        self.node
+            .child_by_field_id(field_id)
+            .map(|c| self.context.wrap(c))
+    }
+
+    pub fn parent(&self) -> Option<Self> {
+        self.node.parent().map(|p| self.context.wrap(p))
+    }
+
     pub fn as_str(&self) -> &'t str {
         &self.context.as_str()[self.node.start_byte()..self.node.end_byte()]
     }

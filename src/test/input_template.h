@@ -1,8 +1,6 @@
 #ifndef OUTPUT_TEMPLATE_H
 #define OUTPUT_TEMPLATE_H
 
-struct MyClass;
-struct Config;
 enum struct Result
 {
     Success = 0,

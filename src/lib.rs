@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 mod format;
-pub use format::*;
+pub use format::{NodeDisplayConfig, Template};
 
 mod context;
 pub use context::*;

@@ -1,38 +1,54 @@
-use crate::{ApiFnArg, ApiFnDef, ApiTyperef, RefType};
+use crate::{ApiFnArg, ApiFnDef, ApiType, TypeName, TypeRelation};
 use std::{collections::HashMap, sync::LazyLock};
 
 pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
     HashMap::from_iter([
         (
+            "do_something",
+            ApiFnDef {
+                name: "do_something".into(),
+                fqns: TypeName::from_iter(["x", "y", "MyClass", "SubClass"]),
+                ret: ApiType {
+                    typ: "int".into(),
+                    relation: TypeRelation::Value,
+                    is_const: false,
+                },
+                args: vec![],
+                noexcept: false,
+                is_const: false,
+            },
+        ),
+        (
             "config",
             ApiFnDef {
-                name: "config".to_string(),
-                fqns: vec!["MyClass".to_string()],
-                ret: ApiTyperef {
-                    typ: "Config".to_string(),
-                    relation: RefType::OutReference,
+                name: "config".into(),
+                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
+                ret: ApiType {
+                    typ: "z::Config".into(),
+                    relation: TypeRelation::Ref,
                     is_const: true,
                 },
                 args: vec![],
                 noexcept: true,
-                immut: true,
+                is_const: true,
             },
         ),
         (
             "set_config",
             ApiFnDef {
-                name: "set_config".to_string(),
-                fqns: vec!["MyClass".to_string()],
-                ret: ApiTyperef::void(),
+                name: "set_config".into(),
+                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
+                ret: ApiType::void(),
                 args: vec![ApiFnArg {
-                    name: "config".to_string(),
-                    typ: ApiTyperef {
-                        typ: "Config".to_string(),
+                    name: "config".into(),
+                    typ: ApiType {
+                        typ: "z::Config".into(),
                         is_const: true,
-                        relation: RefType::Reference,
+                        relation: TypeRelation::Ref,
                     },
+                    is_out: false,
                 }],
-                immut: false,
+                is_const: false,
                 noexcept: false,
             },
         ),

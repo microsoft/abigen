@@ -1,8 +1,6 @@
 #ifndef OUTPUT_TEMPLATE_H
 #define OUTPUT_TEMPLATE_H
 
-struct MyClass;
-struct Config;
 enum struct Result
 {
     Success = 0,
@@ -18,8 +16,12 @@ enum struct Result
 extern "C" {
 #endif
 
-Result myclass_config(const MyClass* self, Config** out);
-Result myclass_set_config(MyClass* self, const Config* config);
+typedef struct XYMyClass XYMyClass;
+typedef struct XYMyClassSubClass XYMyClassSubClass;
+
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out);
+Result x_y_myclass_config(const XYMyClass* self, XYZConfig** out);
+Result x_y_myclass_set_config(XYMyClass* self, const XYZConfig* config);
 
 #ifdef __cplusplus
 } // extern "C"

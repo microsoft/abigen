@@ -4,10 +4,13 @@ use std::{
     path::Path,
 };
 
-use crate::{AbiConfig, Context, Error, query::FnDef};
+use crate::{AbiConfig, Context, Error, format::fmt_wrap, query::FnDef};
 
 mod fn_def;
 pub use fn_def::*;
+
+mod typename;
+pub use typename::*;
 
 const PRE: &'static str = r#"
 #ifdef __cplusplus
@@ -48,10 +51,21 @@ impl Api {
             let mut fns: Vec<_> = self.functions.iter().collect();
             fns.sort();
 
+            let opaque_ptrs: HashSet<_> = self.functions.iter().map(|f| &f.fqns).collect();
+            let mut opaque_ptrs = Vec::from_iter(opaque_ptrs);
+            opaque_ptrs.sort();
+
             writeln!(f, "{PRE}")?;
+
+            for ptr in opaque_ptrs {
+                writeln!(f, "typedef struct {name} {name};", name = fmt_wrap!(ptr.pascal_case))?;
+            }
+            writeln!(f)?;
+
             for func in fns {
                 writeln!(f, "{}", func.header(config))?;
             }
+
             writeln!(f, "{POST}")
         })
     }

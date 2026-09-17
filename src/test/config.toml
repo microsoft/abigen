@@ -3,3 +3,6 @@ value_type = "Result"
 success_value = "Result::Success"
 nullref_value = "Result::ArgumentNull"
 generic_failure_value = "Result::Unknown"
+
+[resolved_types]
+"z::Config" = "x::y::z::Config"
