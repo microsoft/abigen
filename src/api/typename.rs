@@ -65,7 +65,7 @@ impl TypeName {
 }
 
 macro_rules! name_concat(
-    ($first:expr, $($part:expr),* $(,)?) => {
+    ($first:expr $(, $part:expr)* $(,)?) => {
         $first.into_iter().map(|p| String::from(p))
         .$(chain($part.into_iter().map(|p| String::from(p)))).+
         .collect::<$crate::api::typename::TypeName>()
