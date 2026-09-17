@@ -312,7 +312,7 @@ impl ApiType {
 
     fn typ_c(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         if config.builtin_types.contains(&self.typ) {
-            self.typ.snake_case(f)
+            self.typ.cpp_case(f)
         } else if let Some(t) = config.resolved_types.get(&self.typ) {
             t.pascal_case(f)
         } else {

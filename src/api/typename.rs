@@ -1,5 +1,5 @@
 use std::{fmt::{self, Display}, sync::LazyLock};
-use crate::query::{k, f};
+use crate::{format, query::{f, k}};
 
 static VOID_T: LazyLock<TypeName> = LazyLock::new(|| {
     TypeName::from("void")
@@ -101,6 +101,14 @@ impl TypeName {
 
     pub fn iter(&self) -> impl ExactSizeIterator<Item = &str> {
         self.parts.iter().map(|s| s.as_str())
+    }
+
+    pub fn len(&self) -> usize {
+        self.parts.len()
+    }
+
+    pub fn cpp_case(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format::delimited(f, "::", self.parts.iter())
     }
 
     pub fn snake_case(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
