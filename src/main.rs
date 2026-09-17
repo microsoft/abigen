@@ -1,4 +1,4 @@
-use abigen::{AbiConfig, Api, Template};
+use abigen::{AbiConfig, Api, Template, TypeName};
 use clap::Parser;
 use std::{io::Write, path::PathBuf};
 
@@ -48,6 +48,9 @@ struct Cli {
     /// An exception type name that should be caught, and the corresponding return value, separated by '='
     #[arg(long, alias = "excustom")]
     pub custom_exception: Vec<String>,
+
+    #[arg(long)]
+    pub builtin_type: Vec<TypeName>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -141,6 +144,9 @@ fn main() {
                     .map(|(e, v)| (e.to_string(), v.to_string()))
             })
             .collect();
+    }
+    for t in args.builtin_type {
+        config.builtin_types.insert(t);
     }
 
     // write output files

@@ -35,7 +35,7 @@ structured_query! {
             body: (field_declaration_list
                 ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
                 .
-                (field_declaration)*
+                [(comment) (declaration) (field_declaration)]*
                 .
                 (field_declaration
                     declarator: (_) @decl
@@ -55,7 +55,7 @@ structured_query! {
     query: r#"
         (field_declaration
             (type_qualifier ("const") @q)?
-            type: [(primitive_type) (type_identifier) (qualified_identifier)] @t
+            type: [(primitive_type) (type_identifier) (qualified_identifier) (template_type)] @t
         ) @r
     "#
 }
@@ -127,7 +127,7 @@ structured_query! {
     query: r#"
         (_
             (type_qualifier ("const"))? @q
-            type: [(primitive_type) (type_identifier) (qualified_identifier)] @t
+            type: [(primitive_type) (type_identifier) (qualified_identifier) (template_type)] @t
         ) @r
     "#,
 }
