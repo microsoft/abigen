@@ -75,11 +75,14 @@ impl Default for AbiTypeConfig {
     fn default() -> Self {
         Self {
             builtin: ["int", "char", "float", "double"]
-                .into_iter().map(|t| t.into()).collect(),
+                .into_iter()
+                .map(|t| t.into())
+                .collect(),
             resolved: HashMap::new(),
-            cast_mapped: [
-                ("bool", "int"),
-            ].into_iter().map(|(x,y)| (x.into(), y.into())).collect(),
+            cast_mapped: [("bool", "int")]
+                .into_iter()
+                .map(|(x, y)| (x.into(), y.into()))
+                .collect(),
         }
     }
 }

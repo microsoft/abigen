@@ -1,13 +1,11 @@
 use crate::{
-    AbiConfig, TypeName, ApiType, TypeRelation,
+    AbiConfig, ApiType, TypeContext, TypeName, TypeRelation,
     format::{self, fmt_wrap},
     name_concat,
-    query::{k, f, FnArg, FnDef},
+    query::{FnArg, FnDef, f, k},
 };
+use std::fmt::{self, Display};
 use std::{borrow::Cow, hash::Hash};
-use std::{
-    fmt::{self, Display},
-};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
@@ -118,7 +116,11 @@ impl ApiFnDef {
         write!(f, "{} ", config.exception.value_type)?;
         self.name_c(f)?;
         write!(f, "(")?;
-        format::delimited(f, ", ", self.args_c().map(|a| fmt_wrap!(a.decl, config, true)))?;
+        format::delimited(
+            f,
+            ", ",
+            self.args_c().map(|a| fmt_wrap!(a.decl, config, true)),
+        )?;
         write!(f, ")")
     }
 
@@ -134,8 +136,15 @@ impl ApiFnDef {
         }
         writeln!(f)?;
 
-        writeln!(f, "{inner_t}& self = *({inner_t}*)self_ptr;",
-            inner_t = fmt::from_fn(|f| self.fqns.cpp_case(f)),
+        writeln!(
+            f,
+            "{inner_t}& self = *({inner_t}*)self_ptr;",
+            inner_t = fmt::from_fn(|f| {
+                if self.is_const {
+                    write!(f, "const ")?;
+                }
+                self.fqns.cpp_case(f)
+            }),
         )?;
 
         self.body_try_exec(f, config)?;
@@ -168,17 +177,18 @@ impl ApiFnDef {
 
     fn body_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| {
-            a.typ.cast(f, config, false)?;
             a.deref(f, config, false)
         };
 
         if let Some(o) = ApiFnArg::out_arg(&self.ret) {
-            o.deref(f, config, false)?;
+            o.deref(f, config, true)?;
             write!(f, " = ")?;
-            o.typ.cast(f, config, true)?;
+            o.typ.deref_pre_name(f, config, TypeContext::Outbound)?;
             write!(f, "self.{}(", self.name)?;
             format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
-            write!(f, ");")
+            write!(f, ")")?;
+            o.typ.deref_post_name(f, config, TypeContext::Outbound)?;
+            write!(f, ";")
         } else {
             write!(f, "self.{}(", self.name)?;
             format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
@@ -245,7 +255,12 @@ impl ApiFnArg {
     }
 
     fn nullcheck(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        let depth = self.typ.relation.nullcheck_depth(self.is_out);
+        let ctx = if self.is_out {
+            TypeContext::OutArg
+        } else {
+            TypeContext::Outbound
+        };
+        let depth = self.typ.relation.nullcheck_depth(ctx);
         for i in 0..depth {
             write!(
                 f,
@@ -261,14 +276,39 @@ impl ApiFnArg {
         Ok(())
     }
 
-    fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_external: bool) -> fmt::Result {
-        self.typ.decl(f, config, self.is_out, is_external)?;
+    fn decl(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        config: &AbiConfig,
+        is_external: bool,
+    ) -> fmt::Result {
+        let ctx = if self.is_out {
+            TypeContext::OutArg
+        } else if is_external {
+            TypeContext::Outbound
+        } else {
+            TypeContext::Inbound
+        };
+        self.typ.decl(f, config, ctx)?;
         write!(f, " {}", self.name)
     }
 
-    /// Write 
-    fn deref(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_external: bool) -> fmt::Result {
-        self.typ.deref(f, config, self.is_out, is_external)?;
-        write!(f, "{}", self.name)
+    /// Write
+    fn deref(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        config: &AbiConfig,
+        is_external: bool,
+    ) -> fmt::Result {
+        let ctx = if self.is_out {
+            TypeContext::OutArg
+        } else if is_external {
+            TypeContext::Outbound
+        } else {
+            TypeContext::Inbound
+        };
+        self.typ.deref_pre_name(f, config, ctx)?;
+        write!(f, "{}", self.name)?;
+        self.typ.deref_post_name(f, config, ctx)
     }
 }

@@ -74,7 +74,11 @@ impl Api {
             writeln!(f, "{PRE}")?;
 
             for ptr in opaque_ptrs {
-                writeln!(f, "typedef struct {name} {name};", name = fmt_wrap!(ptr.pascal_case))?;
+                writeln!(
+                    f,
+                    "typedef struct {name} {name};",
+                    name = fmt_wrap!(ptr.pascal_case)
+                )?;
             }
             writeln!(f)?;
 

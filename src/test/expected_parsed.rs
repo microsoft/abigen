@@ -15,7 +15,11 @@ pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Literal>> = LazyLock::n
                     name: "do_something",
                     args: vec![FnArg::Literal {
                         name: "flag",
-                        typ: FnArgType::Literal { q: None, t: "bool", r: vec![] },
+                        typ: FnArgType::Literal {
+                            q: None,
+                            t: "bool",
+                            r: vec![],
+                        },
                     }],
                     immut: None,
                     noexcept: None,

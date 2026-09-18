@@ -130,7 +130,7 @@ fn main() {
     }
 
     // apply config overrides
-    
+
     if let Some(v) = args.exception_type {
         config.exception.value_type = v;
     }
@@ -143,29 +143,29 @@ fn main() {
     if let Some(v) = args.generic_failure_value {
         config.exception.generic_failure_value = v;
     }
-    config.exception.custom_values.extend(
-        args.custom_exception.into_iter().filter_map(|v| {
-            v.split_once('=').map(|(k, v)| {
-                (k.trim().into(), v.trim().into())
-            })
-        })
-    );
+    config
+        .exception
+        .custom_values
+        .extend(args.custom_exception.into_iter().filter_map(|v| {
+            v.split_once('=')
+                .map(|(k, v)| (k.trim().into(), v.trim().into()))
+        }));
 
     config.types.builtin.extend(args.builtin_type);
-    config.types.resolved.extend(
-        args.resolve.into_iter().filter_map(|v| {
-            v.split_once('=').map(|(k, v)| {
-                (k.trim().into(), v.trim().into())
-            })
-        })
-    );
-    config.types.cast_mapped.extend(
-        args.cast_map.into_iter().filter_map(|v| {
-            v.split_once('=').map(|(k, v)| {
-                (k.trim().into(), v.trim().into())
-            })
-        })
-    );
+    config
+        .types
+        .resolved
+        .extend(args.resolve.into_iter().filter_map(|v| {
+            v.split_once('=')
+                .map(|(k, v)| (k.trim().into(), v.trim().into()))
+        }));
+    config
+        .types
+        .cast_mapped
+        .extend(args.cast_map.into_iter().filter_map(|v| {
+            v.split_once('=')
+                .map(|(k, v)| (k.trim().into(), v.trim().into()))
+        }));
 
     // write output files
 

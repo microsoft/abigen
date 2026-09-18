@@ -34,10 +34,10 @@ Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out)
     if (out == nullptr) {
         return Result::ArgumentNull;
     }
-    x::y::MyClass& self = *(x::y::MyClass*)self_ptr;
+    const x::y::MyClass& self = *(const x::y::MyClass*)self_ptr;
     *out = nullptr;
     try {
-        *out = (XYZConfig*) &self.config();
+        *out = (XYZConfig*)&self.config();
     }
     catch (...) {
         return Result::Unknown;
