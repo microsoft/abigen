@@ -1,8 +1,8 @@
 use crate::{
-    AbiConfig, TypeName,
+    AbiConfig, TypeName, ApiType, TypeRelation,
     format::{self, fmt_wrap},
     name_concat,
-    query::{k, f, FnArg, FnArgType, FnDef, FnRetType},
+    query::{k, f, FnArg, FnDef},
 };
 use std::{borrow::Cow, hash::Hash};
 use std::{
@@ -118,20 +118,28 @@ impl ApiFnDef {
         write!(f, "{} ", config.exception.value_type)?;
         self.name_c(f)?;
         write!(f, "(")?;
-        format::delimited(f, ", ", self.args_c().map(|a| fmt_wrap!(a.decl, config)))?;
+        format::delimited(f, ", ", self.args_c().map(|a| fmt_wrap!(a.decl, config, true)))?;
         write!(f, ")")
     }
 
     fn body(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         writeln!(f, "{{")?;
 
-        format::delimited(
-            f,
-            "\n",
-            self.args_c().map(|a| fmt_wrap!(a.nullcheck, config)),
+        for a in self.args_c() {
+            if a.nullcheck(f, config).is_ok() {
+                writeln!(f)?;
+            } else {
+                return Err(fmt::Error);
+            }
+        }
+        writeln!(f)?;
+
+        writeln!(f, "{inner_t}& self = *({inner_t}*)self_ptr;",
+            inner_t = fmt::from_fn(|f| self.fqns.cpp_case(f)),
         )?;
 
         self.body_try_exec(f, config)?;
+        writeln!(f)?;
 
         writeln!(f, "return {};", config.exception.success_value)?;
         write!(f, "}}")
@@ -139,9 +147,9 @@ impl ApiFnDef {
 
     fn body_try_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         if let Some(out) = ApiFnArg::out_arg(&self.ret) {
-            out.deref(f)?;
+            out.deref(f, config, false)?;
             write!(f, " = ")?;
-            out.typ.default_value(f, config, false)?;
+            out.typ.default_value(f, config)?;
             writeln!(f, ";")?;
         }
 
@@ -158,19 +166,23 @@ impl ApiFnDef {
         )
     }
 
-    fn body_exec(&self, f: &mut fmt::Formatter<'_>, _config: &AbiConfig) -> fmt::Result {
-        let args = fmt_wrap!(
-            format::delimited,
-            ",",
-            self.args.iter().map(|a| fmt_wrap!(a.deref))
-        );
+    fn body_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
+        let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| {
+            a.typ.cast(f, config, false)?;
+            a.deref(f, config, false)
+        };
+
         if let Some(o) = ApiFnArg::out_arg(&self.ret) {
-            o.deref(f)?;
-            write!(f, " = self->{}(", self.name)?;
-            format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(a.deref)))?;
+            o.deref(f, config, false)?;
+            write!(f, " = ")?;
+            o.typ.cast(f, config, true)?;
+            write!(f, "self.{}(", self.name)?;
+            format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
             write!(f, ");")
         } else {
-            write!(f, "self->{}({args});", self.name)
+            write!(f, "self.{}(", self.name)?;
+            format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
+            write!(f, ");")
         }
     }
 }
@@ -211,7 +223,7 @@ impl ApiFnArg {
                 typ: t.into(),
                 relation: TypeRelation::Ref,
             },
-            name: "self".to_string(),
+            name: "self_ptr".to_string(),
             is_out: false,
         }
     }
@@ -233,7 +245,8 @@ impl ApiFnArg {
     }
 
     fn nullcheck(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        for i in 0..self.typ.relation.nullcheck_depth(self.is_out) {
+        let depth = self.typ.relation.nullcheck_depth(self.is_out);
+        for i in 0..depth {
             write!(
                 f,
                 "if ({deref}{name} == nullptr) {{ return {nullref_exception}; }}",
@@ -241,170 +254,21 @@ impl ApiFnArg {
                 name = self.name,
                 nullref_exception = config.exception.nullref_value,
             )?;
+            if i < depth - 1 {
+                writeln!(f)?;
+            }
         }
         Ok(())
     }
 
-    fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        self.typ.decl(f, config, self.is_out)?;
+    fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_external: bool) -> fmt::Result {
+        self.typ.decl(f, config, self.is_out, is_external)?;
         write!(f, " {}", self.name)
     }
 
-    fn deref(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.typ.relation.deref(f, self.is_out)?;
+    /// Write 
+    fn deref(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_external: bool) -> fmt::Result {
+        self.typ.deref(f, config, self.is_out, is_external)?;
         write!(f, "{}", self.name)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ApiType {
-    pub typ: TypeName,
-    pub is_const: bool,
-    pub relation: TypeRelation,
-}
-
-impl From<&FnArgType::Match<'_>> for ApiType {
-    fn from(value: &FnArgType::Match<'_>) -> Self {
-        Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
-            relation: TypeRelation::from(value),
-        }
-    }
-}
-
-impl From<&FnRetType::Match<'_>> for ApiType {
-    fn from(value: &FnRetType::Match<'_>) -> Self {
-        Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
-            relation: TypeRelation::from(value),
-        }
-    }
-}
-
-impl ApiType {
-    pub fn void() -> Self {
-        Self {
-            typ: TypeName::void().clone(),
-            is_const: false,
-            relation: TypeRelation::Value,
-        }
-    }
-
-    pub fn is_void(&self) -> bool {
-        &self.typ == TypeName::void()
-    }
-
-    pub fn decl(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_out: bool) -> fmt::Result {
-        if self.is_const {
-            write!(f, "const ")?;
-        }
-        self.typ_c(f, config)?;
-        self.relation.decl(f, is_out)
-    }
-
-    pub fn default_value(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig, is_out: bool) -> fmt::Result {
-        self.typ_c(f, config)?;
-        self.relation.decl(f, is_out)?;
-        write!(f, "{{}}")
-    }
-
-    fn typ_c(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        if config.builtin_types.contains(&self.typ) {
-            self.typ.cpp_case(f)
-        } else if let Some(t) = config.resolved_types.get(&self.typ) {
-            t.pascal_case(f)
-        } else {
-            self.typ.pascal_case(f)
-        }
-    }
-}
-
-/// The level of indirection between a variable's real type and its dereferenced type
-///
-/// Each type can be serialized in four ways: input or output, and declaration or dereference. The full table is below:
-///
-/// | Variant | Decl In | Decl Out | Deref In | Deref Out |
-/// |---------|---------|----------|----------|-----------|
-/// | Value   | T       | T*       | T        | *T        |
-/// | Ref     | T*      | T**      | *T       | *T        |
-/// | Owned   | T**     | T**      | move(*T) | *T        |
-/// | Ptr(n)  | T*(n)   | T*(n+1)  | T        | *T        |
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum TypeRelation {
-    #[default]
-    Value,
-    Ref,
-    Owned,
-    Ptr(usize),
-}
-
-impl From<&FnArgType::Match<'_>> for TypeRelation {
-    fn from(value: &FnArgType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
-            TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
-            TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
-            TypeRelation::Owned
-        } else {
-            TypeRelation::Ptr(value.r.len())
-        }
-    }
-}
-
-impl From<&FnRetType::Match<'_>> for TypeRelation {
-    fn from(value: &FnRetType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
-            TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
-            TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
-            TypeRelation::Owned
-        } else {
-            TypeRelation::Ptr(value.r.len())
-        }
-    }
-}
-
-impl TypeRelation {
-    pub fn nullcheck_depth(&self, is_out: bool) -> usize {
-        match self {
-            Self::Value if is_out => 1,
-            Self::Value => 0,
-            Self::Ref if is_out => 1,
-            Self::Ref => 1,
-            Self::Owned if is_out => 1,
-            Self::Owned => 2,
-            Self::Ptr(_) if is_out => 1,
-            Self::Ptr(_) => 0,
-        }
-    }
-
-    pub fn decl(&self, f: &mut fmt::Formatter<'_>, is_out: bool) -> fmt::Result {
-        match self {
-            Self::Value if is_out => write!(f, "*"),
-            Self::Value => Ok(()),
-            Self::Ref if is_out => write!(f, "**"),
-            Self::Ref => write!(f, "*"),
-            Self::Owned if is_out => write!(f, "**"),
-            Self::Owned => write!(f, "**"),
-            Self::Ptr(depth) if is_out => format::repeat(f, "*", depth + 1),
-            Self::Ptr(depth) => format::repeat(f, "*", *depth),
-        }
-    }
-
-    pub fn deref(&self, f: &mut fmt::Formatter<'_>, is_out: bool) -> fmt::Result {
-        match self {
-            Self::Value if is_out => write!(f, "*"),
-            Self::Value => Ok(()),
-            Self::Ref if is_out => write!(f, "*"),
-            Self::Ref => write!(f, "*"),
-            Self::Owned if is_out => write!(f, "*"),
-            Self::Owned => write!(f, "*"),
-            Self::Ptr(_) if is_out => write!(f, "*"),
-            Self::Ptr(_) => Ok(()),
-        }
     }
 }

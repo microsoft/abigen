@@ -16,7 +16,7 @@ namespace x::y
     public:
         class SubClass {
         public:
-            int do_something();
+            bool do_something(bool flag);
         };
 
         const z::Config& config() const noexcept;

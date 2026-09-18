@@ -11,7 +11,7 @@ use std::{io::Write, path::PathBuf};
 struct Cli {
     /// A C++ header file to be mapped to C
     #[arg(long, short = 'i')]
-    pub input: PathBuf,
+    pub input: Vec<PathBuf>,
 
     /// A file that will be updated with the generated header data and written to the output
     #[arg(long, alias = "th")]
@@ -51,6 +51,12 @@ struct Cli {
 
     #[arg(long)]
     pub builtin_type: Vec<TypeName>,
+
+    #[arg(long)]
+    pub resolve: Vec<String>,
+
+    #[arg(long)]
+    pub cast_map: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -91,7 +97,10 @@ fn main() {
 
     // read input files
 
-    let api = Api::from_file(&args.input).expect("Failed to load input header");
+    let mut api = Api::new();
+    for f in args.input {
+        api.merge(Api::from_file(f).expect("Failed to load input header"));
+    }
 
     let template_h = if let Some(p) = args.template_h {
         Template::from_file(p).expect("Failed to load header template")
@@ -118,36 +127,45 @@ fn main() {
     if let Some(p) = args.config_file {
         let buf = std::fs::read(p).expect("Failed to read config file");
         config = toml::from_slice(&buf).expect("Failed to parse config file");
-        config = config.with_defaults();
     }
 
-    // apply config options
-
-    if let Some(t) = args.exception_type {
-        config.exception.value_type = t;
+    // apply config overrides
+    
+    if let Some(v) = args.exception_type {
+        config.exception.value_type = v;
     }
-    if let Some(s) = args.success_value {
-        config.exception.success_value = s;
+    if let Some(v) = args.success_value {
+        config.exception.success_value = v;
     }
-    if let Some(n) = args.nullref_value {
-        config.exception.nullref_value = n;
+    if let Some(v) = args.nullref_value {
+        config.exception.nullref_value = v;
     }
-    if let Some(g) = args.generic_failure_value {
-        config.exception.generic_failure_value = g;
+    if let Some(v) = args.generic_failure_value {
+        config.exception.generic_failure_value = v;
     }
-    if args.custom_exception.len() > 0 {
-        config.exception.custom_values = args
-            .custom_exception
-            .into_iter()
-            .filter_map(|s| {
-                s.split_once('=')
-                    .map(|(e, v)| (e.to_string(), v.to_string()))
+    config.exception.custom_values.extend(
+        args.custom_exception.into_iter().filter_map(|v| {
+            v.split_once('=').map(|(k, v)| {
+                (k.trim().into(), v.trim().into())
             })
-            .collect();
-    }
-    for t in args.builtin_type {
-        config.builtin_types.insert(t);
-    }
+        })
+    );
+
+    config.types.builtin.extend(args.builtin_type);
+    config.types.resolved.extend(
+        args.resolve.into_iter().filter_map(|v| {
+            v.split_once('=').map(|(k, v)| {
+                (k.trim().into(), v.trim().into())
+            })
+        })
+    );
+    config.types.cast_mapped.extend(
+        args.cast_map.into_iter().filter_map(|v| {
+            v.split_once('=').map(|(k, v)| {
+                (k.trim().into(), v.trim().into())
+            })
+        })
+    );
 
     // write output files
 

@@ -18,7 +18,8 @@ pub static CRATE_DIR: LazyLock<PathBuf> =
 
 pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
     let buf = std::fs::read(CRATE_DIR.join("src/test/config.toml")).expect("Failed to read config");
-    toml::from_slice(&buf).expect("Failed to parse config")
+    let c: AbiConfig = toml::from_slice(&buf).expect("Failed to parse config");
+    c.with_defaults()
 });
 
 structured_query! {
