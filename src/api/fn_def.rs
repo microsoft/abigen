@@ -176,9 +176,7 @@ impl ApiFnDef {
     }
 
     fn body_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| {
-            a.deref(f, config, false)
-        };
+        let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
 
         if let Some(o) = ApiFnArg::out_arg(&self.ret) {
             o.deref(f, config, true)?;

@@ -9,8 +9,7 @@ use std::{io::Write, path::PathBuf};
 /// "@abigen:start" and "@abigen:end" comment tags.
 #[derive(Parser)]
 struct Cli {
-    /// A C++ header file to be mapped to C
-    #[arg(long, short = 'i')]
+    /// C++ header files to be mapped to C
     pub input: Vec<PathBuf>,
 
     /// A file that will be updated with the generated header data and written to the output

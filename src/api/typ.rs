@@ -146,7 +146,7 @@ impl ApiType {
     ) -> fmt::Result {
         let typ = config.types.resolved.get(&self.typ).unwrap_or(&self.typ);
         let ext = config.types.cast_mapped.get(typ).unwrap_or(typ);
-        
+
         if context == TypeContext::Inbound {
             typ.cpp_case(f)
         } else if config.types.builtin.contains(ext) {
@@ -225,7 +225,11 @@ impl TypeRelation {
     }
 
     /// The part of the deref that comes before the cast
-    pub(crate) fn deref_pre_cast(&self, f: &mut fmt::Formatter<'_>, context: TypeContext) -> fmt::Result {
+    pub(crate) fn deref_pre_cast(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        context: TypeContext,
+    ) -> fmt::Result {
         match (self, context) {
             (_, TypeContext::OutArg) => write!(f, "*"),
             (Self::Ref, TypeContext::Inbound) => write!(f, "*"),
@@ -234,7 +238,11 @@ impl TypeRelation {
     }
 
     /// The part of the deref that comes after the cast
-    pub(crate) fn deref_post_cast(&self, f: &mut fmt::Formatter<'_>, context: TypeContext) -> fmt::Result {
+    pub(crate) fn deref_post_cast(
+        &self,
+        f: &mut fmt::Formatter<'_>,
+        context: TypeContext,
+    ) -> fmt::Result {
         match (self, context) {
             (Self::Ref, TypeContext::Outbound) => write!(f, "&"),
             (Self::Owned, TypeContext::Inbound) => write!(f, "*"),
@@ -324,19 +332,27 @@ mod test {
         assert_deref!(value_inbound, ["a::b", Value, Inbound], "(a::b)t");
         assert_deref!(value_outbound, ["a::b", Value, Outbound], "(AB)t");
         assert_deref!(value_outarg, ["a::b", Value, OutArg], "*t");
-        
+
         assert_deref!(ref_inbound, ["a::b", Ref, Inbound], "*(a::b*)t");
         assert_deref!(ref_outbound, ["a::b", Ref, Outbound], "(AB*)&t");
         assert_deref!(ref_outarg, ["a::b", Ref, OutArg], "*t");
-        
-        assert_deref!(owned_inbound, ["a::b", Owned, Inbound], "std::move((a::b&&)*t)");
-        assert_deref!(owned_outbound, ["a::b", Owned, Outbound], "(AB*)&std::move(t)");
+
+        assert_deref!(
+            owned_inbound,
+            ["a::b", Owned, Inbound],
+            "std::move((a::b&&)*t)"
+        );
+        assert_deref!(
+            owned_outbound,
+            ["a::b", Owned, Outbound],
+            "(AB*)&std::move(t)"
+        );
         assert_deref!(owned_outarg, ["a::b", Owned, OutArg], "*t");
-        
+
         assert_deref!(ptr1_inbound, ["a::b", Ptr(1), Inbound], "(a::b*)t");
         assert_deref!(ptr1_outbound, ["a::b", Ptr(1), Outbound], "(AB*)t");
         assert_deref!(ptr1_outarg, ["a::b", Ptr(1), OutArg], "*t");
-        
+
         assert_deref!(ptr2_inbound, ["a::b", Ptr(2), Inbound], "(a::b**)t");
         assert_deref!(ptr2_outbound, ["a::b", Ptr(2), Outbound], "(AB**)t");
         assert_deref!(ptr2_outarg, ["a::b", Ptr(2), OutArg], "*t");
