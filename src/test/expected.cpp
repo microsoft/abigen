@@ -7,25 +7,6 @@
 extern "C" {
 #endif
 
-Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out)
-{
-    if (self_ptr == nullptr) {
-        return Result::ArgumentNull;
-    }
-    if (out == nullptr) {
-        return Result::ArgumentNull;
-    }
-    x::y::MyClass::SubClass& self = *(x::y::MyClass::SubClass*)self_ptr;
-    *out = int{};
-    try {
-        *out = (int)self.do_something((bool)flag);
-    }
-    catch (...) {
-        return Result::Unknown;
-    }
-    return Result::Success;
-}
-
 Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out)
 {
     if (self_ptr == nullptr) {
@@ -61,6 +42,25 @@ Result x_y_myclass_set_config(XYMyClass* self_ptr, const XYZConfig* config)
         return Result::Unknown;
     }
     
+    return Result::Success;
+}
+
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out)
+{
+    if (self_ptr == nullptr) {
+        return Result::ArgumentNull;
+    }
+    if (out == nullptr) {
+        return Result::ArgumentNull;
+    }
+    x::y::MyClass::SubClass& self = *(x::y::MyClass::SubClass*)self_ptr;
+    *out = int{};
+    try {
+        *out = (int)self.do_something((bool)flag);
+    }
+    catch (...) {
+        return Result::Unknown;
+    }
     return Result::Success;
 }
 

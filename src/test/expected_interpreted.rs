@@ -1,4 +1,4 @@
-use crate::{ApiFnArg, ApiFnDef, ApiType, TypeName, TypeRelation};
+use crate::{ApiFnArg, ApiFnDef, ApiFnRole, ApiType, TypeName, TypeRelation};
 use std::{collections::HashMap, sync::LazyLock};
 
 pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
@@ -6,13 +6,15 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
         (
             "do_something",
             ApiFnDef {
-                name: "do_something".into(),
-                fqns: TypeName::from_iter(["x", "y", "MyClass", "SubClass"]),
-                ret: ApiType {
-                    typ: "bool".into(),
-                    relation: TypeRelation::Value,
-                    is_const: false,
+                role: ApiFnRole::Method {
+                    name: "do_something".into(),
+                    ret: ApiType {
+                        typ: "bool".into(),
+                        relation: TypeRelation::Value,
+                        is_const: false,
+                    },
                 },
+                fqns: TypeName::from_iter(["x", "y", "MyClass", "SubClass"]),
                 args: vec![ApiFnArg {
                     typ: ApiType {
                         typ: "bool".into(),
@@ -29,13 +31,15 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
         (
             "config",
             ApiFnDef {
-                name: "config".into(),
-                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
-                ret: ApiType {
-                    typ: "z::Config".into(),
-                    relation: TypeRelation::Ref,
-                    is_const: true,
+                role: ApiFnRole::Method {
+                    name: "config".into(),
+                    ret: ApiType {
+                        typ: "z::Config".into(),
+                        relation: TypeRelation::Ref,
+                        is_const: true,
+                    },
                 },
+                fqns: TypeName::from_iter(["x", "y", "MyClass"]),
                 args: vec![],
                 noexcept: true,
                 is_const: true,
@@ -44,9 +48,11 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
         (
             "set_config",
             ApiFnDef {
-                name: "set_config".into(),
+                role: ApiFnRole::Method {
+                    name: "set_config".into(),
+                    ret: ApiType::void(),
+                },
                 fqns: TypeName::from_iter(["x", "y", "MyClass"]),
-                ret: ApiType::void(),
                 args: vec![ApiFnArg {
                     name: "config".into(),
                     typ: ApiType {

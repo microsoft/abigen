@@ -4,13 +4,40 @@ use crate::{
     name_concat,
     query::{FnArg, FnDef, f, k},
 };
-use std::fmt::{self, Display};
-use std::{borrow::Cow, hash::Hash};
+use std::{borrow::Cow, cmp::Ordering, fmt::{self, Display}, hash::Hash};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ApiFnRole {
+    Constructor,
+    Destructor,
+    Method { name: String, ret: ApiType },
+}
+
+impl Ord for ApiFnRole {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Self::Constructor, Self::Constructor) => Ordering::Equal,
+            (Self::Constructor, _) => Ordering::Greater,
+            (Self::Destructor, Self::Constructor) => Ordering::Less,
+            (Self::Destructor, Self::Destructor) => Ordering::Equal,
+            (Self::Destructor, Self::Method { .. }) => Ordering::Greater,
+            (Self::Method { name: s_name, .. }, Self::Method { name: o_name, .. }) => {
+                s_name.cmp(o_name)
+            },
+            (Self::Method { .. }, _) => Ordering::Less,
+        }
+    }
+}
+
+impl PartialOrd for ApiFnRole {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
-    pub ret: ApiType,
-    pub name: String,
+    pub role: ApiFnRole,
     pub fqns: TypeName,
     pub args: Vec<ApiFnArg>,
     pub noexcept: bool,
@@ -45,8 +72,10 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
         }
 
         Self {
-            ret: ApiType::from(&value.ret),
-            name: value.decl.name.as_str().to_string(),
+            role: ApiFnRole::Method {
+                ret: ApiType::from(&value.ret),
+                name: value.decl.name.as_str().to_string(),
+            },
             fqns,
             args: value.decl.args.iter().map(|a| a.into()).collect(),
             noexcept: value.decl.noexcept.is_some(),
@@ -57,9 +86,7 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
 
 impl Ord for ApiFnDef {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let ours = self.fqns.iter().chain([self.name.as_str()].into_iter());
-        let theirs = other.fqns.iter().chain([other.name.as_str()].into_iter());
-        ours.cmp(theirs)
+        self.fqns.iter().cmp(other.fqns.iter()).then(self.role.cmp(&other.role))
     }
 }
 
@@ -90,22 +117,22 @@ impl ApiFnDef {
     }
 
     fn name_c(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        name_concat!(self.fqns.iter(), [self.name.as_str()]).snake_case(f)
-    }
-
-    /// The name of the C type that opaquely stands in for the C++ type
-    fn inst_handle_t(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.fqns.pascal_case(f)
+        let name = match &self.role {
+            ApiFnRole::Constructor => "new",
+            ApiFnRole::Destructor => "destroy",
+            ApiFnRole::Method { name, .. } => name.as_str(),
+        };
+        name_concat!(self.fqns.iter(), [name]).snake_case(f)
     }
 
     fn args_c<'a>(&'a self) -> impl Iterator<Item = Cow<'a, ApiFnArg>> {
         let mut args: Vec<_> = self.args.iter().map(|a| Cow::Borrowed(a)).collect();
 
-        let self_t = fmt::from_fn(|f| self.inst_handle_t(f)).to_string();
-        let self_arg = ApiFnArg::self_arg(self.is_const, self_t);
-        args.insert(0, Cow::Owned(self_arg));
+        if let Some(self_arg) = ApiFnArg::self_arg(self) {
+            args.insert(0, Cow::Owned(self_arg));
+        }
 
-        if let Some(o) = ApiFnArg::out_arg(&self.ret) {
+        if let Some(o) = ApiFnArg::out_arg(self) {
             args.push(Cow::Owned(o));
         }
 
@@ -113,7 +140,22 @@ impl ApiFnDef {
     }
 
     fn proto(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        write!(f, "{} ", config.exception.value_type)?;
+        if matches!(self.role, ApiFnRole::Constructor) 
+            && self.noexcept 
+            && self.args.iter().all(|a| {
+                a.typ.relation != TypeRelation::Ref && a.typ.relation != TypeRelation::Owned
+            })
+        {
+            ApiType {
+                typ: self.fqns.clone(),
+                is_const: false,
+                relation: TypeRelation::Owned,
+            }.decl(f, config, TypeContext::Outbound)?;
+            write!(f, " ")?;
+        } else {
+            write!(f, "{} ", config.exception.value_type)?;
+        }
+
         self.name_c(f)?;
         write!(f, "(")?;
         format::delimited(
@@ -155,7 +197,7 @@ impl ApiFnDef {
     }
 
     fn body_try_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        if let Some(out) = ApiFnArg::out_arg(&self.ret) {
+        if let Some(out) = ApiFnArg::out_arg(self) {
             out.deref(f, config, false)?;
             write!(f, " = ")?;
             out.typ.default_value(f, config)?;
@@ -176,22 +218,35 @@ impl ApiFnDef {
     }
 
     fn body_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
+        let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| {
+            a.deref(f, config, false)
+        };
 
-        if let Some(o) = ApiFnArg::out_arg(&self.ret) {
-            o.deref(f, config, true)?;
-            write!(f, " = ")?;
-            o.typ.deref_pre_name(f, config, TypeContext::Outbound)?;
-            write!(f, "self.{}(", self.name)?;
-            format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
-            write!(f, ")")?;
-            o.typ.deref_post_name(f, config, TypeContext::Outbound)?;
-            write!(f, ";")
-        } else {
-            write!(f, "self.{}(", self.name)?;
-            format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
-            write!(f, ");")
+        match &self.role {
+            ApiFnRole::Constructor => {
+                Ok(())
+            },
+            ApiFnRole::Destructor => {
+                Ok(())
+            },
+            ApiFnRole::Method { name, .. } => {
+                if let Some(o) = ApiFnArg::out_arg(self) {
+                    o.deref(f, config, true)?;
+                    write!(f, " = ")?;
+                    o.typ.deref_pre_name(f, config, TypeContext::Outbound)?;
+                    write!(f, "self.{}(", name)?;
+                    format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
+                    write!(f, ")")?;
+                    o.typ.deref_post_name(f, config, TypeContext::Outbound)?;
+                    write!(f, ";")
+                } else {
+                    write!(f, "self.{}(", name)?;
+                    format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
+                    write!(f, ");")
+                }
+            },
         }
+        
     }
 }
 
@@ -224,31 +279,57 @@ impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
 }
 
 impl ApiFnArg {
-    fn self_arg(is_const: bool, t: impl Into<TypeName>) -> Self {
-        Self {
-            typ: ApiType {
-                is_const,
-                typ: t.into(),
-                relation: TypeRelation::Ref,
-            },
-            name: "self_ptr".to_string(),
-            is_out: false,
+    fn self_arg(def: &ApiFnDef) -> Option<Self> {
+        match &def.role {
+            ApiFnRole::Constructor => None,
+            ApiFnRole::Destructor => Some(Self {
+                typ: ApiType {
+                    is_const: false,
+                    typ: def.fqns.clone(),
+                    relation: TypeRelation::Owned,
+                },
+                name: "self_ptr".into(),
+                is_out: false,
+            }),
+            ApiFnRole::Method { .. } => Some(Self {
+                typ: ApiType {
+                    is_const: def.is_const,
+                    typ: def.fqns.clone(),
+                    relation: TypeRelation::Ref,
+                },
+                name: "self_ptr".to_string(),
+                is_out: false,
+            }),
         }
     }
 
-    fn out_arg(t: &ApiType) -> Option<Self> {
-        if !t.is_void() {
-            Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: t.typ.clone(),
-                    relation: t.relation,
-                },
-                name: "out".to_string(),
-                is_out: true,
-            })
-        } else {
-            None
+    fn out_arg(def: &ApiFnDef) -> Option<Self> {
+        match &def.role {
+            ApiFnRole::Constructor if def.noexcept => None,
+            ApiFnRole::Constructor => {
+                Some(Self {
+                    typ: ApiType {
+                        is_const: false,
+                        typ: def.fqns.clone(),
+                        relation: TypeRelation::Owned,
+                    },
+                    name: "out".into(),
+                    is_out: true,
+                })
+            },
+            ApiFnRole::Destructor => None,
+            ApiFnRole::Method { ret, .. } if ret.is_void() => None,
+            ApiFnRole::Method { ret, .. } => {
+                Some(Self {
+                    typ: ApiType {
+                        is_const: false,
+                        typ: ret.typ.clone(),
+                        relation: ret.relation,
+                    },
+                    name: "out".into(),
+                    is_out: true,
+                })
+            },
         }
     }
 
