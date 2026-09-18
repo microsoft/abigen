@@ -1,9 +1,13 @@
-use std::{fmt::{self, Display}, sync::LazyLock};
-use crate::{format, query::{f, k}};
+use crate::{
+    format,
+    query::{f, k},
+};
+use std::{
+    fmt::{self, Display},
+    sync::LazyLock,
+};
 
-static VOID_T: LazyLock<TypeName> = LazyLock::new(|| {
-    TypeName::from("void")
-});
+static VOID_T: LazyLock<TypeName> = LazyLock::new(|| TypeName::from("void"));
 
 #[derive(Debug, Clone, Copy)]
 pub struct TypeParseError {
@@ -18,12 +22,27 @@ impl TypeParseError {
 
 impl Display for TypeParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Failed to parse type from node. Expected an identifier, got '{}'", self.kind)
+        write!(
+            f,
+            "Failed to parse type from node. Expected an identifier, got '{}'",
+            self.kind
+        )
     }
 }
 impl std::error::Error for TypeParseError {}
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, std::hash::Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    std::hash::Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 #[serde(from = "&str")]
 pub struct TypeName {
     parts: Vec<String>,
@@ -32,7 +51,11 @@ pub struct TypeName {
 impl<T: AsRef<str>> From<T> for TypeName {
     fn from(value: T) -> Self {
         Self {
-            parts: value.as_ref().split("::").map(|p| String::from(p)).collect(),
+            parts: value
+                .as_ref()
+                .split("::")
+                .map(|p| String::from(p))
+                .collect(),
         }
     }
 }
@@ -67,11 +90,12 @@ impl TypeName {
             if name.node.kind_id() == *k::TYPE_ID {
                 out.push(name.as_str().to_string());
                 Ok(())
-            }
-            else if name.node.kind_id() == *k::QUALIFIED_ID {
-                let scope = name.child_by_field_id(*f::SCOPE)
+            } else if name.node.kind_id() == *k::QUALIFIED_ID {
+                let scope = name
+                    .child_by_field_id(*f::SCOPE)
                     .ok_or(TypeParseError::new(name.node.kind()))?;
-                let name = name.child_by_field_id(*f::NAME)
+                let name = name
+                    .child_by_field_id(*f::NAME)
                     .ok_or(TypeParseError::new(name.node.kind()))?;
 
                 if scope.node.kind_id() == *k::NS_ID {

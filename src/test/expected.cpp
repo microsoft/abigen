@@ -1,4 +1,5 @@
 #include "expected.h"
+#include "input.h"
 
 // @abigen:start
 
@@ -6,17 +7,18 @@
 extern "C" {
 #endif
 
-Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out)
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out)
 {
-    if (self == nullptr) {
+    if (self_ptr == nullptr) {
         return Result::ArgumentNull;
     }
     if (out == nullptr) {
         return Result::ArgumentNull;
     }
+    x::y::MyClass::SubClass& self = *(x::y::MyClass::SubClass*)self_ptr;
     *out = int{};
     try {
-        *out = self->do_something();
+        *out = (int)self.do_something((bool)flag);
     }
     catch (...) {
         return Result::Unknown;
@@ -24,17 +26,18 @@ Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self, int* out)
     return Result::Success;
 }
 
-Result x_y_myclass_config(const XYMyClass* self, XYZConfig** out)
+Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out)
 {
-    if (self == nullptr) {
+    if (self_ptr == nullptr) {
         return Result::ArgumentNull;
     }
     if (out == nullptr) {
         return Result::ArgumentNull;
     }
-    *out = XYZConfig*{};
+    const x::y::MyClass& self = *(const x::y::MyClass*)self_ptr;
+    *out = nullptr;
     try {
-        *out = self->config();
+        *out = (XYZConfig*)&self.config();
     }
     catch (...) {
         return Result::Unknown;
@@ -42,17 +45,17 @@ Result x_y_myclass_config(const XYMyClass* self, XYZConfig** out)
     return Result::Success;
 }
 
-Result x_y_myclass_set_config(XYMyClass* self, const XYZConfig* config)
+Result x_y_myclass_set_config(XYMyClass* self_ptr, const XYZConfig* config)
 {
-    if (self == nullptr) {
+    if (self_ptr == nullptr) {
         return Result::ArgumentNull;
     }
     if (config == nullptr) {
         return Result::ArgumentNull;
     }
-
+    x::y::MyClass& self = *(x::y::MyClass*)self_ptr;
     try {
-        self->set_config(*config);
+        self.set_config(*(const x::y::z::Config*)config);
     }
     catch (...) {
         return Result::Unknown;

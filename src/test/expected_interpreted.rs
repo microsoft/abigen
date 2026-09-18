@@ -9,11 +9,19 @@ pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::ne
                 name: "do_something".into(),
                 fqns: TypeName::from_iter(["x", "y", "MyClass", "SubClass"]),
                 ret: ApiType {
-                    typ: "int".into(),
+                    typ: "bool".into(),
                     relation: TypeRelation::Value,
                     is_const: false,
                 },
-                args: vec![],
+                args: vec![ApiFnArg {
+                    typ: ApiType {
+                        typ: "bool".into(),
+                        is_const: false,
+                        relation: TypeRelation::Value,
+                    },
+                    name: "flag".into(),
+                    is_out: false,
+                }],
                 noexcept: false,
                 is_const: false,
             },

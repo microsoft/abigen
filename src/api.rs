@@ -12,6 +12,9 @@ pub use fn_def::*;
 mod typename;
 pub use typename::*;
 
+mod typ;
+pub use typ::*;
+
 const PRE: &'static str = r#"
 #ifdef __cplusplus
 extern "C" {
@@ -30,6 +33,10 @@ pub struct Api {
 }
 
 impl Api {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn from_file(header_file: impl AsRef<Path>) -> Result<Self, Error> {
         let header = std::fs::read(header_file)?;
         Self::from_buffer(header)
@@ -46,6 +53,15 @@ impl Api {
         Ok(s)
     }
 
+    pub fn merged(mut self, other: Self) -> Self {
+        self.merge(other);
+        self
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        self.functions.extend(other.functions);
+    }
+
     pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
             let mut fns: Vec<_> = self.functions.iter().collect();
@@ -58,7 +74,11 @@ impl Api {
             writeln!(f, "{PRE}")?;
 
             for ptr in opaque_ptrs {
-                writeln!(f, "typedef struct {name} {name};", name = fmt_wrap!(ptr.pascal_case))?;
+                writeln!(
+                    f,
+                    "typedef struct {name} {name};",
+                    name = fmt_wrap!(ptr.pascal_case)
+                )?;
             }
             writeln!(f)?;
 
@@ -78,6 +98,7 @@ impl Api {
             writeln!(f, "{PRE}")?;
             for func in fns {
                 writeln!(f, "{}", func.code(config))?;
+                writeln!(f)?;
             }
             writeln!(f, "{POST}")
         })
