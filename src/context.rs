@@ -165,7 +165,11 @@ impl<'a> std::fmt::Debug for ContextNode<'a> {
 
 impl PartialEq<ContextNode<'_>> for ContextNode<'_> {
     fn eq(&self, other: &ContextNode<'_>) -> bool {
-        cursor_eq(&mut self.walk(), &mut other.walk()).is_ok()
+        if std::ptr::eq(self.context, other.context) {
+            self.node == other.node
+        } else {
+            cursor_eq(&mut self.walk(), &mut other.walk()).is_ok()
+        }
     }
 }
 

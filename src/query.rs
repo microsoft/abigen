@@ -71,10 +71,24 @@ macro_rules! field_val (
 );
 
 macro_rules! field_merge (
-    ($dest:ident, $src: ident, $f:ident, [_]) => {
+    ($dest:ident, $src:ident, $f:ident, _) => {
+        $dest.$f = $src.$f
+    };
+    ($dest:ident, $src:ident, $f:ident, ?) => {
+        $dest.$f = $src.$f
+    };
+    ($dest:ident, $src:ident, $f:ident, [_]) => {
         for x in $src.$f {
             $dest.$f.push(x);
         }
+    };
+    ($dest:ident, $src:ident, $f:ident, [$($sub_q:ident)::+]) => {
+        for x in $src.$f {
+            $dest.$f.push(x);
+        }
+    };
+    ($dest:ident, $src:ident, $f:ident, $($sub_q:ident)::+) => {
+        $dest.$f = $src.$f
     };
 );
 
@@ -183,8 +197,8 @@ macro_rules! structured_query {
 
                 while let Some(m) = matches.next() {
                     if let Some(new_match) = Match::from_match(node.context, m) {
-                        if let Some(old) = ret.iter_mut().find(|old| *old == &new_match) {
-                            $($( $crate::query::field_merge!(old, new_match, $collection, $collection_t) )*)?
+                        if let Some(_old) = ret.iter_mut().find(|old| *old == &new_match) {
+                            $($( $crate::query::field_merge!(_old, new_match, $collection, $collection_t) )*)?
                         } else {
                             ret.push(new_match);
                         }

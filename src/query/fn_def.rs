@@ -25,22 +25,44 @@ pub mod f {
 }
 
 structured_query! {
-    name: pub FnDef,
+    name: pub ClassDef,
     fields: {
-        ret: FnRetType,
-        decl: FnDecl,
+        name: _,
+        -
+        fn_decl: FnDecl,
+        fn_ret: FnRetType,
     },
     query: r#"
         (class_specifier
+            name: (type_identifier) @name
             body: (field_declaration_list
                 ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
                 .
                 [(comment) (declaration) (field_declaration)]*
                 .
                 (field_declaration
-                    declarator: (_) @decl
-                ) @ret
+                    declarator: (_) @fn_decl
+                ) @fn_ret
             )
+        )
+    "#,
+}
+
+structured_query! {
+    name: pub FnDef,
+    fields: {
+        ret: FnRetType,
+        decl: FnDecl,
+    },
+    query: r#"
+        (field_declaration_list
+            ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
+            .
+            [(comment) (declaration) (field_declaration)]*
+            .
+            (field_declaration
+                declarator: (_) @decl
+            ) @ret
         )
     "#
 }
@@ -279,5 +301,28 @@ mod test {
         let root = ctx.root();
         println!("{root}");
         crate::test::collection_eq(FnArgType::Match::from_node(root), expected);
+    }
+
+    #[test]
+    fn class() {
+        println!("{}", crate::test::input::CTX.root());
+        crate::test::collection_eq(
+            ClassDef::Match::from_node(crate::test::input::CTX.root()),
+            vec![
+                ClassDef::Literal {
+                    name: "MyClass",
+                    methods: vec![
+                        crate::test::expected::PARSED.get("config").unwrap().clone(),
+                        crate::test::expected::PARSED.get("set_config").unwrap().clone(),
+                    ]
+                },
+                ClassDef::Literal {
+                    name: "SubClass",
+                    methods: vec![
+                        crate::test::expected::PARSED.get("do_something").unwrap().clone(),
+                    ]
+                }
+            ]
+        );
     }
 }
