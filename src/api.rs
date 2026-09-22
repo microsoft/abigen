@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::{AbiConfig, Context, Error, format::fmt_wrap, query::FnDef};
+use crate::{AbiConfig, Context, Error, format::fmt_wrap, query::ClassDef};
 
 mod fn_def;
 pub use fn_def::*;
@@ -14,6 +14,9 @@ pub use typename::*;
 
 mod typ;
 pub use typ::*;
+
+mod class;
+pub use class::*;
 
 const PRE: &'static str = r#"
 #ifdef __cplusplus
@@ -29,7 +32,7 @@ const POST: &'static str = r#"
 
 #[derive(Debug, Clone, Default)]
 pub struct Api {
-    pub functions: HashSet<ApiFnDef>,
+    pub classes: HashSet<ApiClassDef>,
 }
 
 impl Api {
@@ -46,8 +49,8 @@ impl Api {
         let mut s = Self::default();
 
         let ctx = Context::from_buffer(header)?;
-        for m in FnDef::Match::from_node(ctx.root()) {
-            s.functions.insert(ApiFnDef::from(&m));
+        for m in ClassDef::Match::from_node(ctx.root()) {
+            s.classes.insert(ApiClassDef::from(&m));
         }
 
         Ok(s)
@@ -59,31 +62,35 @@ impl Api {
     }
 
     pub fn merge(&mut self, other: Self) {
-        self.functions.extend(other.functions);
+        self.classes.extend(other.classes);
     }
 
     pub fn header(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            let mut fns: Vec<_> = self.functions.iter().collect();
-            fns.sort();
-
-            let opaque_ptrs: HashSet<_> = self.functions.iter().map(|f| &f.fqns).collect();
-            let mut opaque_ptrs = Vec::from_iter(opaque_ptrs);
-            opaque_ptrs.sort();
+            let mut classes: Vec<_> = self.classes.iter().collect();
+            classes.sort();
 
             writeln!(f, "{PRE}")?;
 
-            for ptr in opaque_ptrs {
+            for class in &classes {
+                let name = &class.name;
                 writeln!(
                     f,
                     "typedef struct {name} {name};",
-                    name = fmt_wrap!(ptr.pascal_case)
+                    name = fmt_wrap!(name.pascal_case),
                 )?;
             }
+
             writeln!(f)?;
 
-            for func in fns {
-                writeln!(f, "{}", func.header(config))?;
+            for class in &classes {
+                let mut methods: Vec<_> = class.methods.iter().collect();
+                methods.sort();
+                for method in methods {
+                    method.header(f, config, class)?;
+                    writeln!(f)?;
+                }
+                writeln!(f)?;
             }
 
             writeln!(f, "{POST}")
@@ -92,14 +99,22 @@ impl Api {
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
-            let mut fns: Vec<_> = self.functions.iter().collect();
-            fns.sort();
+            let mut classes: Vec<_> = self.classes.iter().collect();
+            classes.sort();
 
             writeln!(f, "{PRE}")?;
-            for func in fns {
-                writeln!(f, "{}", func.code(config))?;
+
+            for class in &self.classes {
+                let mut methods: Vec<_> = class.methods.iter().collect();
+                methods.sort();
+
+                for func in methods {
+                    func.code(f, config, class)?;
+                    writeln!(f)?;
+                }
                 writeln!(f)?;
             }
+
             writeln!(f, "{POST}")
         })
     }

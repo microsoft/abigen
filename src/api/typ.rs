@@ -18,21 +18,21 @@ pub struct ApiType {
     pub relation: TypeRelation,
 }
 
-impl From<&query::FnArgType::Match<'_>> for ApiType {
-    fn from(value: &query::FnArgType::Match<'_>) -> Self {
+impl From<&query::FnArg::Match<'_>> for ApiType {
+    fn from(value: &query::FnArg::Match<'_>) -> Self {
         Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
+            is_const: value.typ_qual.is_some(),
+            typ: value.typ.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
     }
 }
 
-impl From<&query::FnRetType::Match<'_>> for ApiType {
-    fn from(value: &query::FnRetType::Match<'_>) -> Self {
+impl From<&query::FnDef::Match<'_>> for ApiType {
+    fn from(value: &query::FnDef::Match<'_>) -> Self {
         Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
+            is_const: value.ret_qual.is_some(),
+            typ: value.ret_typ.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
     }
@@ -167,30 +167,30 @@ pub enum TypeRelation {
     Ptr(usize),
 }
 
-impl From<&query::FnArgType::Match<'_>> for TypeRelation {
-    fn from(value: &query::FnArgType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
+impl From<&query::FnArg::Match<'_>> for TypeRelation {
+    fn from(value: &query::FnArg::Match<'_>) -> Self {
+        if value.typ_refs.len() == 0 {
             TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
+        } else if value.typ_refs[0].r.as_str() == "&" {
             TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
+        } else if value.typ_refs[0].r.as_str() == "&&" {
             TypeRelation::Owned
         } else {
-            TypeRelation::Ptr(value.r.len())
+            TypeRelation::Ptr(value.typ_refs.len())
         }
     }
 }
 
-impl From<&query::FnRetType::Match<'_>> for TypeRelation {
-    fn from(value: &query::FnRetType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
+impl From<&query::FnDef::Match<'_>> for TypeRelation {
+    fn from(value: &query::FnDef::Match<'_>) -> Self {
+        if value.ret_refs.len() == 0 {
             TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
+        } else if value.ret_refs[0].r.as_str() == "&" {
             TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
+        } else if value.ret_refs[0].r.as_str() == "&&" {
             TypeRelation::Owned
         } else {
-            TypeRelation::Ptr(value.r.len())
+            TypeRelation::Ptr(value.ret_refs.len())
         }
     }
 }

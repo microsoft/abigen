@@ -38,10 +38,10 @@ macro_rules! field_t (
     ([_]) => {
         Vec<$crate::ContextNode<'tree>>
     };
-    ([$($sub_q:ident)::+]) => {
+    ([$(=)? $($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Match<'tree>>
     };
-    ($($sub_q:ident)::+) => {
+    (($(=)? $($sub_q:ident)::+)) => {
         $($sub_q)::+::Match<'tree>
     };
 );
@@ -63,9 +63,23 @@ macro_rules! field_val (
             ).into_iter()
         }).flatten().collect())
     };
-    ($query:expr, $ctx:ident, $m:ident, $f:ident, $($sub_q:ident)::+) => {
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, [=$($sub_q:ident)::+]) => {
+        Some($m.nodes_for_capture_index($query.$f).map(|n| {
+            $($sub_q)::+::Match::from_node_with_options(
+                $ctx.wrap(n),
+                Some(1),
+            ).into_iter()
+        }).flatten().collect())
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, ($($sub_q:ident)::+)) => {
         $($sub_q)::+::Match::from_node(
             $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
+        ).into_iter().next()
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, (=$($sub_q:ident)::+)) => {
+        $($sub_q)::+::Match::from_node_with_options(
+            $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
+            Some(0),
         ).into_iter().next()
     };
 );
@@ -82,12 +96,12 @@ macro_rules! field_merge (
             $dest.$f.push(x);
         }
     };
-    ($dest:ident, $src:ident, $f:ident, [$($sub_q:ident)::+]) => {
+    ($dest:ident, $src:ident, $f:ident, [$(=)? $($sub_q:ident)::+]) => {
         for x in $src.$f {
             $dest.$f.push(x);
         }
     };
-    ($dest:ident, $src:ident, $f:ident, $($sub_q:ident)::+) => {
+    ($dest:ident, $src:ident, $f:ident, ($(=)? $($sub_q:ident)::+)) => {
         $dest.$f = $src.$f
     };
 );
@@ -102,10 +116,10 @@ macro_rules! test_t (
     ([_]) => {
         Vec<&'tree str>
     };
-    ([$($sub_q:ident)::+]) => {
+    ([$(=)? $($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Literal<'tree>>
     };
-    ($($sub_q:ident)::+) => {
+    (($(=)? $($sub_q:ident)::+)) => {
         $($sub_q)::+::Literal<'tree>
     };
 );
@@ -124,11 +138,11 @@ macro_rules! test_eq (
     ($self:ident, $other:ident, $f:ident, [_]) => {
         $other.$f.iter().zip($self.$f.iter()).all(|(o, s)| o.as_str() == *s)
     };
-    ($self:ident, $other:ident, $f:ident, [$($sub_q:ident)::+]) => {
+    ($self:ident, $other:ident, $f:ident, [$(=)? $($sub_q:ident)::+]) => {
         $self.$f.len() == $other.$f.len()
             && $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
     };
-    ($self:ident, $other:ident, $f:ident, $($sub_q:ident)::+) => {
+    ($self:ident, $other:ident, $f:ident, ($(=)? $($sub_q:ident)::+)) => {
         $self.$f == $other.$f
     };
 );
@@ -187,11 +201,15 @@ macro_rules! structured_query {
         }
 
         impl<'tree> Match<'tree> {
-            pub fn from_node(node: $crate::ContextNode<'tree>)
-                -> Vec<Self> {
+            pub fn from_node(node: $crate::ContextNode<'tree>) -> Vec<Self> {
+                Self::from_node_with_options(node, None)
+            }
+
+            pub fn from_node_with_options(node: $crate::ContextNode<'tree>, max_start_depth: Option<u32>) -> Vec<Self> {
                 use ::tree_sitter::StreamingIterator;
 
                 let mut cursor = ::tree_sitter::QueryCursor::new();
+                cursor.set_max_start_depth(max_start_depth);
                 let mut matches = cursor.matches(&QUERY_INST.query, node.node, node.context.as_str().as_bytes());
                 let mut ret: Vec<Match<'tree>> = vec![];
 
@@ -269,7 +287,7 @@ macro_rules! structured_query {
     }
 };
 }
-pub(crate) use {field_t, field_val, field_merge, structured_query, test_eq, test_t};
+pub(crate) use {field_merge, field_t, field_val, structured_query, test_eq, test_t};
 
 #[cfg(test)]
 pub mod test {

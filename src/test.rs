@@ -1,6 +1,6 @@
 use crate::{
-    AbiConfig, Api, ApiFnDef, Context, ContextNode, Template,
-    query::{FnDef, structured_query},
+    AbiConfig, Api, ApiClassDef, Context, ContextNode, Template,
+    query::{ClassDef, structured_query},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -115,19 +115,25 @@ pub mod expected {
 
 pub mod actual {
     use super::*;
+    use crate::TypeName;
 
-    pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Match<'static>>> =
+    /// Maps the unqualified class name to its query structure
+    pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Match<'static>>> =
         LazyLock::new(|| {
-            FnDef::Match::from_node(input::CTX.root())
+            ClassDef::Match::from_node(input::CTX.root())
                 .into_iter()
-                .map(|m| (m.decl.name.as_str(), m))
+                .map(|m| (m.name.as_str(), m))
                 .collect()
         });
 
-    pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
+    /// Maps the fully qualified class name to its api structure
+    pub static INTERPRETED: LazyLock<HashMap<TypeName, ApiClassDef>> = LazyLock::new(|| {
         PARSED
-            .iter()
-            .map(|(name, m)| (*name, ApiFnDef::from(m)))
+            .values()
+            .map(|m| {
+                let m = ApiClassDef::from(m);
+                (m.name.clone(), m)
+            })
             .collect()
     });
 
@@ -216,51 +222,72 @@ fn code() {
 }
 
 macro_rules! gen_test(
-    ($cpp_name:ident, $c_name:ident) => {
+    ($($class_part:ident)::+, $method:ident) => {
         #[cfg(test)]
-        mod $cpp_name {
+        mod $method {
             #[allow(unused)]
             use super::*;
 
             #[test]
             fn parsed() {
+                let name = $crate::TypeName::from_iter([$(stringify!($class_part)),+]);
+                let uqname = name.iter().last().unwrap();
+                let expected_class = expected::PARSED.get(uqname).unwrap_or_else(|| panic!("No expected '{uqname}'"));
+                let actual_class = actual::PARSED.get(uqname).unwrap_or_else(|| panic!("No actual '{uqname}'"));
                 assert_eq!(
-                    expected::PARSED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    actual::PARSED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
+                    expected_class.methods.iter().find(|m| m.decl.name == stringify!($method))
+                        .expect(concat!("No expected '", stringify!($method), "'")),
+                    actual_class.methods.iter().find(|m| m.decl.name.as_str() == stringify!($method))
+                        .expect(concat!("No actual '", stringify!($method), "'")),
                 );
             }
 
             #[test]
             fn interpreted() {
+                let name = $crate::TypeName::from_iter([$(stringify!($class_part)),+]);
+                let expected_class = expected::INTERPRETED.get(&name).expect(concat!("No expected ", stringify!($($class_part)::+)));
+                let actual_class = actual::INTERPRETED.get(&name).expect(concat!("No actual ", stringify!($($class_part)::+)));
+                let matches = |m: &&$crate::ApiFnDef| -> bool {
+                    use $crate::ApiFnRole;
+                    if let ApiFnRole::Method { name, .. } = &m.role {
+                        name.as_str() == stringify!($method)
+                    } else {
+                        false
+                    }
+                };
                 assert_eq!(
-                    expected::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    actual::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
+                    expected_class.methods.iter().find(matches)
+                        .expect(concat!("No expected '", stringify!($method), "'")),
+                    actual_class.methods.iter().find(matches)
+                        .expect(concat!("No actual '", stringify!($method), "'")),
                 );
             }
 
             #[test]
             fn h() {
-                actual::H_MAP.get(stringify!($c_name))
-                    .expect(concat!("No actual ", stringify!($cpp_name)))
+                let c_name = std::fmt::from_fn(|f| $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)).to_string();
+                actual::H_MAP.get(c_name.as_str())
+                    .unwrap_or_else(|| panic!("No actual {c_name}"))
                     .diff(
-                        expected::H_MAP.get(stringify!($c_name))
-                            .expect(concat!("No expected ", stringify!($cpp_name)))
+                        expected::H_MAP.get(c_name.as_str())
+                            .unwrap_or_else(|| panic!("No expected {c_name}"))
                     ).expect("Mismatch");
             }
 
             #[test]
             fn cpp() {
-                actual::CPP_MAP.get(stringify!($c_name))
-                    .expect(concat!("No actual ", stringify!($cpp_name)))
+                let c_name = std::fmt::from_fn(|f| $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)).to_string();
+                actual::CPP_MAP.get(c_name.as_str())
+                    .unwrap_or_else(|| panic!("No actual {c_name}"))
                     .diff(
-                        expected::CPP_MAP.get(stringify!($c_name))
-                            .expect(concat!("No expected ", stringify!($cpp_name)))
+                        expected::CPP_MAP.get(c_name.as_str())
+                            .unwrap_or_else(|| panic!("No expected {c_name}"))
                     ).expect("Mismatch");
             }
         }
     };
 );
 
-gen_test!(do_something, x_y_myclass_subclass_do_something);
-gen_test!(config, x_y_myclass_config);
-gen_test!(set_config, x_y_myclass_set_config);
+gen_test!(x::y::MyClass::SubClass, do_something);
+gen_test!(x::y::MyClass, config);
+gen_test!(x::y::MyClass, set_config);
