@@ -1,6 +1,6 @@
 use abigen::{self, Context, NodeDisplayConfig};
 use clap::Parser;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use tree_sitter::{Query, QueryCursor, StreamingIterator};
 
 /// Print the abstract syntax tree (AST) of a C++ header file
@@ -41,12 +41,19 @@ fn main() {
     if let Some(ref qtext) = args.query {
         let q =
             Query::new(&tree_sitter_cpp::LANGUAGE.into(), qtext).expect("Failed to compile query");
+        let capture_names = q.capture_names();
+        let captures: HashMap<_, _> = capture_names.iter().map(|name| (*name, q.capture_index_for_name(*name).unwrap())).collect();
+
         let mut qc = QueryCursor::new();
         let node = ctx.root();
         let mut qm = qc.matches(&q, node.node, ctx.as_str().as_bytes());
         while let Some(m) = qm.next() {
-            let node = ctx.wrap(m.nodes_for_capture_index(0).next().unwrap());
-            println!("{node}");
+            for (name, i) in captures.iter() {
+                if let Some(n) = m.nodes_for_capture_index(*i).next() {
+                    let node = ctx.wrap(n);
+                    println!("{name}: {node}");
+                }
+            }
         }
     } else {
         println!("{}", ctx.root());

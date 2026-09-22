@@ -29,6 +29,7 @@ structured_query! {
     fields: {
         name: _,
         -
+        ctor: [=FnDecl],
         methods: [=FnDef],
     },
     query: r#"
@@ -39,8 +40,13 @@ structured_query! {
                 .
                 [(comment) (declaration) (field_declaration)]*
                 .
-                (field_declaration) @methods
-            )*)
+                [
+                    (field_declaration) @methods
+                    (declaration
+                        declarator: (function_declarator) @ctor
+                    )
+                ]
+            ))
         )
     "#,
 }

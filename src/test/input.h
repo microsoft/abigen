@@ -19,6 +19,9 @@ namespace x::y
             bool do_something(bool flag);
         };
 
+    public:
+        MyClass() noexcept;
+
         const z::Config& config() const noexcept;
         void set_config(const z::Config& config);
     };

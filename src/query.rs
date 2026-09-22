@@ -215,8 +215,9 @@ macro_rules! structured_query {
 
                 while let Some(m) = matches.next() {
                     if let Some(new_match) = Match::from_match(node.context, m) {
+                        dbg!(&new_match);
                         if let Some(_old) = ret.iter_mut().find(|old| *old == &new_match) {
-                            $($( $crate::query::field_merge!(_old, new_match, $collection, $collection_t) )*)?
+                            $($( $crate::query::field_merge!(_old, new_match, $collection, $collection_t); )*)?
                         } else {
                             ret.push(new_match);
                         }
