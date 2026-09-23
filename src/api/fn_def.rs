@@ -4,7 +4,7 @@ use crate::{
     name_concat,
     query::{FnArg, FnDef, FnDecl},
 };
-use std::{borrow::Cow, cmp::Ordering, fmt, hash::Hash};
+use std::{borrow::Cow, cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ApiFnRole {
@@ -17,14 +17,24 @@ impl Ord for ApiFnRole {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self, other) {
             (Self::Constructor, Self::Constructor) => Ordering::Equal,
-            (Self::Constructor, _) => Ordering::Greater,
-            (Self::Destructor, Self::Constructor) => Ordering::Less,
+            (Self::Constructor, _) => Ordering::Less,
+            (Self::Destructor, Self::Constructor) => Ordering::Greater,
             (Self::Destructor, Self::Destructor) => Ordering::Equal,
-            (Self::Destructor, Self::Method { .. }) => Ordering::Greater,
+            (Self::Destructor, Self::Method { .. }) => Ordering::Less,
             (Self::Method { name: s_name, .. }, Self::Method { name: o_name, .. }) => {
                 s_name.cmp(o_name)
             }
-            (Self::Method { .. }, _) => Ordering::Less,
+            (Self::Method { .. }, _) => Ordering::Greater,
+        }
+    }
+}
+
+impl AsRef<str> for ApiFnRole {
+    fn as_ref(&self) -> &str {
+        match self {
+            Self::Constructor => "new",
+            Self::Destructor => "destroy",
+            Self::Method { name, .. } => name.as_str(),
         }
     }
 }
@@ -32,6 +42,21 @@ impl Ord for ApiFnRole {
 impl PartialOrd for ApiFnRole {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl ApiFnRole {
+    pub fn name_matches(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Constructor, Self::Constructor) => true,
+            (Self::Destructor, Self::Destructor) => true,
+            (Self::Method { name: s_name, ..}, Self::Method { name: o_name, ..}) => s_name == o_name,
+            _ => false,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
     }
 }
 
@@ -86,8 +111,9 @@ impl ApiFnDef {
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
         class: &ApiClassDef,
+        make_unique: bool,
     ) -> fmt::Result {
-        self.proto(f, config, class)?;
+        self.proto(f, config, class, make_unique)?;
         write!(f, ";")
     }
 
@@ -96,43 +122,38 @@ impl ApiFnDef {
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
         class: &ApiClassDef,
+        make_unique: bool,
     ) -> fmt::Result {
-        self.proto(f, config, class)?;
+        self.proto(f, config, class, make_unique)?;
         writeln!(f)?;
         self.body(f, config, class)
     }
 
-    fn is_default_constructor(&self) -> bool {
-        self.role == ApiFnRole::Constructor
-            && self.args.len() == 0
-    }
+    fn name_c(&self, f: &mut fmt::Formatter<'_>, class: &ApiClassDef, make_unique: bool) -> fmt::Result {
+        let mut h = DefaultHasher::new();
+        match &self.role {
+            ApiFnRole::Method { name, ret, .. } => {
+                name.hash(&mut h);
+                ret.hash(&mut h);
+            },
+            ApiFnRole::Constructor => {
+                "ctor".hash(&mut h);
+            },
+            ApiFnRole::Destructor => {
+                "dtor".hash(&mut h);
+            },
+        }
+        for a in self.args.iter() {
+            a.hash(&mut h);
+        }
+        let slug = format!("{:#x}", h.finish());
+        let slug = (&slug[2..6]).to_string();
 
-    fn is_move_constructor_for(&self, class: &ApiClassDef) -> bool {
-        self.role == ApiFnRole::Constructor
-            && self.args.len() == 1
-            && self.args[0].typ.typ == class.name
-            && !self.args[0].typ.is_const
-            && self.args[0].typ.relation == TypeRelation::Owned
-    }
-
-    fn is_copy_constructor_for(&self, class: &ApiClassDef) -> bool {
-        self.role == ApiFnRole::Constructor
-            && self.args.len() == 1
-            && self.args[0].typ.typ == class.name
-            && self.args[0].typ.is_const
-            && self.args[0].typ.relation == TypeRelation::Ref
-    }
-
-    fn name_c(&self, f: &mut fmt::Formatter<'_>, class: &ApiClassDef) -> fmt::Result {
-        let name = match &self.role {
-            ApiFnRole::Constructor if self.is_default_constructor() => "new_default",
-            ApiFnRole::Constructor if self.is_move_constructor_for(class) => "move",
-            ApiFnRole::Constructor if self.is_copy_constructor_for(class) => "copy",
-            ApiFnRole::Constructor => "new",
-            ApiFnRole::Destructor => "destroy",
-            ApiFnRole::Method { name, .. } => name.as_str(),
-        };
-        name_concat!(class.name.iter(), [name]).snake_case(f)
+        if make_unique {
+            name_concat!(class.name.iter(), [self.role.as_str(), slug.as_str()]).snake_case(f)
+        } else {
+            name_concat!(class.name.iter(), [self.role.as_str()]).snake_case(f)
+        }
     }
 
     fn args_c<'a>(&'a self, class: &ApiClassDef) -> impl Iterator<Item = Cow<'a, ApiFnArg>> {
@@ -154,6 +175,7 @@ impl ApiFnDef {
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
         class: &ApiClassDef,
+        make_unique: bool,
     ) -> fmt::Result {
         if matches!(self.role, ApiFnRole::Constructor)
             && self.noexcept
@@ -164,7 +186,7 @@ impl ApiFnDef {
             ApiType {
                 typ: class.name.clone(),
                 is_const: false,
-                relation: TypeRelation::Owned,
+                relation: TypeRelation::Ptr(1),
             }
             .decl(f, config, TypeContext::Outbound)?;
             write!(f, " ")?;
@@ -172,7 +194,7 @@ impl ApiFnDef {
             write!(f, "{} ", config.exception.value_type)?;
         }
 
-        self.name_c(f, class)?;
+        self.name_c(f, class, make_unique)?;
         write!(f, "(")?;
         format::delimited(
             f,

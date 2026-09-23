@@ -126,7 +126,7 @@ impl ApiType {
                 write!(f, "const ")?;
             }
             self.typename(f, config, context)?;
-            if self.relation == TypeRelation::Ref {
+            if self.relation == TypeRelation::Ref || self.relation == TypeRelation::Owned && context == TypeContext::Outbound {
                 TypeRelation::Ptr(1).decl(f, context)?;
             } else {
                 self.relation.decl(f, context)?;
@@ -217,7 +217,7 @@ impl TypeRelation {
             (Self::Ref, TypeContext::Outbound) => write!(f, "*"),
             (Self::Ref, TypeContext::Inbound) => write!(f, "&"),
             (Self::Owned, TypeContext::OutArg) => write!(f, "**"),
-            (Self::Owned, TypeContext::Outbound) => write!(f, "*"),
+            (Self::Owned, TypeContext::Outbound) => write!(f, "**"),
             (Self::Owned, TypeContext::Inbound) => write!(f, "&&"),
             (Self::Ptr(depth), TypeContext::OutArg) => format::repeat(f, "*", depth + 1),
             (Self::Ptr(depth), _) => format::repeat(f, "*", *depth),
@@ -289,7 +289,7 @@ mod test {
         assert_decl!(ref_outarg, ["a::b", Ref, OutArg], "AB** t");
 
         assert_decl!(owned_inbound, ["a::b", Owned, Inbound], "a::b&& t");
-        assert_decl!(owned_outbound, ["a::b", Owned, Outbound], "AB* t");
+        assert_decl!(owned_outbound, ["a::b", Owned, Outbound], "AB** t");
         assert_decl!(owned_outarg, ["a::b", Owned, OutArg], "AB** t");
 
         assert_decl!(ptr1_inbound, ["a::b", Ptr(1), Inbound], "a::b* t");

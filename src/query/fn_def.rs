@@ -97,7 +97,7 @@ structured_query! {
     },
     query: r#"
         (function_declarator
-            declarator: (field_identifier) @name
+            declarator: [(identifier) (field_identifier)] @name
             parameters: (parameter_list
                 (parameter_declaration)* @args
             )

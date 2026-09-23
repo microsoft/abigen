@@ -7,9 +7,19 @@
 extern "C" {
 #endif
 
-XYMyClass* x_y_myclass_new_default()
+XYMyClass* x_y_myclass_new()
 {
     return (XYMyClass*) new x::y::MyClass();
+}
+
+Result x_y_myclass_destroy(XYMyClass** self_ptr)
+{
+    if (self_ptr == nullptr) { return Result::ArgumentNull; }
+    if (*self_ptr == nullptr) { return Result::ArgumentNull; }
+    x::y::MyClass* self = *(x::y::MyClass**) self_ptr;
+    delete self;
+    *self_ptr = nullptr;
+    return Result::Success;
 }
 
 Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out)

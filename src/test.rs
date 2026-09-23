@@ -23,21 +23,16 @@ pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
 });
 
 structured_query! {
-    /// Find function declarations in a header file
     name: HeaderDecl,
     fields: {
-        /// The name of the function being declared
-        name: _,
-        /// The node of the overall declaration
+        decl: (crate::query::FnDecl),
         full: _,
     },
     query: r#"
         (declaration
-            declarator: (function_declarator
-                declarator: (identifier) @name
-            )
+            declarator: (_) @decl
         ) @full
-    "#,
+    "#
 }
 
 structured_query! {
@@ -96,7 +91,7 @@ pub mod expected {
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
         HeaderDecl::Match::from_node(H_TEMPLATED.root())
             .into_iter()
-            .map(|m| (m.name.as_str(), m.full))
+            .map(|m| (m.decl.name.as_str(), m.full))
             .collect()
     });
 
@@ -149,7 +144,7 @@ pub mod actual {
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
         HeaderDecl::Match::from_node(H_FULL.root())
             .into_iter()
-            .map(|m| (m.name.as_str(), m.full))
+            .map(|m| (m.decl.name.as_str(), m.full))
             .collect()
     });
 
@@ -234,13 +229,15 @@ macro_rules! gen_test(
                 let uqname = name.iter().last().unwrap();
                 let expected_class = expected::PARSED.get(uqname).unwrap_or_else(|| panic!("No expected '{uqname}'"));
                 let actual_class = actual::PARSED.get(uqname).unwrap_or_else(|| panic!("No actual '{uqname}'"));
-
-                assert_eq!(
-                    expected_class.methods.iter().find(|m| m.decl.name == stringify!($method))
-                        .expect(concat!("No expected '", stringify!($method), "'")),
-                    actual_class.methods.iter().find(|m| m.decl.name.as_str() == stringify!($method))
-                        .expect(concat!("No actual '", stringify!($method), "'")),
-                );
+                
+                if stringify!($method) == "new" {
+                    collection_eq(&actual_class.ctor, &expected_class.ctor);
+                } else {
+                    collection_eq(
+                        actual_class.methods.iter().filter(|m| m.decl.name.as_str() == stringify!($method)),
+                        expected_class.methods.iter().filter(|m| m.decl.name == stringify!($method)),
+                    );
+                }
             }
 
             #[test]
@@ -249,18 +246,11 @@ macro_rules! gen_test(
                 let expected_class = expected::INTERPRETED.get(&name).expect(concat!("No expected ", stringify!($($class_part)::+)));
                 let actual_class = actual::INTERPRETED.get(&name).expect(concat!("No actual ", stringify!($($class_part)::+)));
                 let matches = |m: &&$crate::ApiFnDef| -> bool {
-                    use $crate::ApiFnRole;
-                    if let ApiFnRole::Method { name, .. } = &m.role {
-                        name.as_str() == stringify!($method)
-                    } else {
-                        false
-                    }
+                    m.role.as_str() == stringify!($method)
                 };
-                assert_eq!(
-                    expected_class.methods.iter().find(matches)
-                        .expect(concat!("No expected '", stringify!($method), "'")),
-                    actual_class.methods.iter().find(matches)
-                        .expect(concat!("No actual '", stringify!($method), "'")),
+                collection_eq(
+                    actual_class.methods.iter().filter(matches),
+                    expected_class.methods.iter().filter(matches),
                 );
             }
 
@@ -269,6 +259,8 @@ macro_rules! gen_test(
                 let c_name = std::fmt::from_fn(|f| {
                     $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)
                 }).to_string();
+                let _: &HashMap<_, _> = &actual::H_MAP;
+                dbg!(&actual::H_MAP);
 
                 actual::H_MAP.get(c_name.as_str())
                     .unwrap_or_else(|| panic!("No actual {c_name}"))
@@ -296,6 +288,7 @@ macro_rules! gen_test(
 );
 
 gen_test!(x::y::MyClass::SubClass, do_something);
-gen_test!(x::y::MyClass, ctor);
+gen_test!(x::y::MyClass, new);
+gen_test!(x::y::MyClass, destroy);
 gen_test!(x::y::MyClass, config);
 gen_test!(x::y::MyClass, set_config);

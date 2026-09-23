@@ -22,7 +22,8 @@ extern "C" {
 typedef struct XYMyClass XYMyClass;
 typedef struct XYMyClassSubClass XYMyClassSubClass;
 
-XYMyClass* x_y_myclass_new_default();
+XYMyClass* x_y_myclass_new();
+Result x_y_myclass_destroy(XYMyClass** self_ptr);
 Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out);
 Result x_y_myclass_set_config(XYMyClass* self_ptr, const XYZConfig* config);
 Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out);
