@@ -17,8 +17,15 @@ Result x_y_myclass_destroy(XYMyClass** self_ptr)
     if (self_ptr == nullptr) { return Result::ArgumentNull; }
     if (*self_ptr == nullptr) { return Result::ArgumentNull; }
     x::y::MyClass* self = *(x::y::MyClass**) self_ptr;
-    delete self;
+    
+    try {
+        delete self;
+    } catch (...) {
+        return Result::Unknown;
+    }
+
     *self_ptr = nullptr;
+    
     return Result::Success;
 }
 

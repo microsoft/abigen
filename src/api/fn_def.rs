@@ -170,6 +170,12 @@ impl ApiFnDef {
         args.into_iter()
     }
 
+    fn needs_trycatch(&self, class: &ApiClassDef) -> bool {
+        !self.noexcept || self.args_c(class).any(|a| {
+            a.typ.relation == TypeRelation::Ref || a.typ.relation == TypeRelation::Owned
+        })
+    }
+
     fn proto(
         &self,
         f: &mut fmt::Formatter<'_>,
@@ -177,22 +183,21 @@ impl ApiFnDef {
         class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
-        if matches!(self.role, ApiFnRole::Constructor)
-            && self.noexcept
-            && self.args.iter().all(|a| {
-                a.typ.relation != TypeRelation::Ref && a.typ.relation != TypeRelation::Owned
-            })
-        {
+        if self.needs_trycatch(class) {
+            write!(f, "{}", config.exception.value_type)?;
+        } else if let ApiFnRole::Constructor = &self.role {
             ApiType {
                 typ: class.name.clone(),
                 is_const: false,
                 relation: TypeRelation::Ptr(1),
             }
             .decl(f, config, TypeContext::Outbound)?;
-            write!(f, " ")?;
+        } else if let ApiFnRole::Method { ret, .. } = &self.role {
+            ret.decl(f, config, TypeContext::Outbound)?;
         } else {
-            write!(f, "{} ", config.exception.value_type)?;
+            write!(f, "void")?;
         }
+        write!(f, " ")?;
 
         self.name_c(f, class, make_unique)?;
         write!(f, "(")?;
@@ -212,30 +217,56 @@ impl ApiFnDef {
     ) -> fmt::Result {
         writeln!(f, "{{")?;
 
+        // null checks
         for a in self.args_c(class) {
-            if a.nullcheck(f, config).is_ok() {
-                writeln!(f)?;
-            } else {
-                return Err(fmt::Error);
-            }
+            a.nullcheck(f, config)?;
+            writeln!(f)?;
         }
         writeln!(f)?;
 
-        writeln!(
-            f,
-            "{inner_t}& self = *({inner_t}*)self_ptr;",
-            inner_t = fmt::from_fn(|f| {
-                if self.is_const {
-                    write!(f, "const ")?;
-                }
-                class.name.cpp_case(f)
-            }),
-        )?;
+        // self cast
+        let selves = match ApiFnArg::self_arg(class, self) {
+            // dtor version
+            Some(mut self_arg @ ApiFnArg { typ: ApiType { relation: TypeRelation::Owned, ..}, ..}) => {
+                // pretend it's a reference to a pointer rather than a flat owned reference
+                self_arg.typ.relation = TypeRelation::Ref;
 
-        self.body_try_exec(f, config, class)?;
+                let mut self_ref = self_arg.clone();
+                self_ref.name = "self".into();
+                self_ref.typ.relation = TypeRelation::Ptr(1);
+                Some((self_ref, self_arg))
+            },
+            // method version
+            Some(self_arg @ ApiFnArg { typ: ApiType { relation: TypeRelation::Ref, ..}, ..}) => {
+                let mut self_ref = self_arg.clone();
+                self_ref.name = "self".into();
+                Some((self_ref, self_arg))
+            },
+            _ => None,
+        };
+
+        if let Some((def, arg)) = selves {
+            def.decl(f, config, false)?;
+            write!(f, " = ")?;
+            arg.deref(f, config, false)?;
+            writeln!(f, ";")?;
+        }
+        
+        // declare the return value if necessary
+        if let Some(out) = ApiFnArg::out_arg(class, self) && !out.is_out {
+            out.decl(f, config, true)?;
+            writeln!(f)?;
+        }
+
+        if self.needs_trycatch(class) {
+            self.body_try_exec(f, config, class)?;
+        } else {
+            self.body_exec(f, config, class)?;
+        }
         writeln!(f)?;
 
-        writeln!(f, "return {};", config.exception.success_value)?;
+        
+
         write!(f, "}}")
     }
 
@@ -258,11 +289,13 @@ impl ApiFnDef {
             writeln!(f, "catch ({catch}) {{ return {ret}; }}")?;
         }
 
-        write!(
+        writeln!(
             f,
             "catch (...) {{ return {}; }}",
             config.exception.generic_failure_value
-        )
+        )?;
+
+        write!(f, "return {};", config.exception.success_value)
     }
 
     fn body_exec(
@@ -370,7 +403,7 @@ impl ApiFnArg {
                     relation: ret.relation,
                 },
                 name: "out".into(),
-                is_out: true,
+                is_out: method_def.needs_trycatch(class_def),
             }),
         }
     }

@@ -25,7 +25,7 @@ pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
 structured_query! {
     name: HeaderDecl,
     fields: {
-        decl: (crate::query::FnDecl),
+        decl: (FnDecl),
         full: _,
     },
     query: r#"
@@ -40,17 +40,27 @@ structured_query! {
     name: CodeDef,
     fields: {
         /// The name of the function being declared
-        name: _,
+        def: (FnDecl),
         /// The node of the overall declaration
         full: _,
     },
     query: r#"
         (function_definition
-            declarator: (function_declarator
-                declarator: (identifier) @name
-            )
+            declarator: (_) @def
         ) @full
     "#,
+}
+
+structured_query! {
+    name: FnDecl,
+    fields: {
+        name: _,
+    },
+    query: r#"
+        (function_declarator
+            declarator: (identifier) @name
+        )
+    "#
 }
 
 pub mod input {
@@ -103,7 +113,7 @@ pub mod expected {
         LazyLock::new(|| {
             CodeDef::Match::from_node(CPP_TEMPLATED.root())
                 .into_iter()
-                .map(|m| (m.name.as_str(), m.full))
+                .map(|m| (m.def.name.as_str(), m.full))
                 .collect()
         });
 }
@@ -160,7 +170,7 @@ pub mod actual {
         LazyLock::new(|| {
             CodeDef::Match::from_node(CPP_FULL.root())
                 .into_iter()
-                .map(|m| (m.name.as_str(), m.full))
+                .map(|m| (m.def.name.as_str(), m.full))
                 .collect()
         });
 
