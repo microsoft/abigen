@@ -40,6 +40,18 @@ pub static INTERPRETED: LazyLock<HashMap<TypeName, ApiClassDef>> = LazyLock::new
                 name: "x::y::MyClass".into(),
                 methods: HashSet::from_iter([
                     ApiFnDef {
+                        role: ApiFnRole::Constructor,
+                        args: vec![],
+                        noexcept: true,
+                        is_const: false,
+                    },
+                    ApiFnDef {
+                        role: ApiFnRole::Destructor,
+                        args: vec![],
+                        noexcept: true,
+                        is_const: false,
+                    },
+                    ApiFnDef {
                         role: ApiFnRole::Method {
                             name: "config".into(),
                             ret: ApiType {

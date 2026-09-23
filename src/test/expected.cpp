@@ -7,6 +7,11 @@
 extern "C" {
 #endif
 
+XYMyClass* x_y_myclass_new_default()
+{
+    return (XYMyClass*) new x::y::MyClass();
+}
+
 Result x_y_myclass_config(const XYMyClass* self_ptr, XYZConfig** out)
 {
     if (self_ptr == nullptr) {

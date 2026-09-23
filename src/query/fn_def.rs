@@ -92,7 +92,7 @@ structured_query! {
     fields: {
         name: _,
         args: [=FnArg],
-        immut: ?,
+        is_const: ?,
         noexcept: ?,
     },
     query: r#"
@@ -101,7 +101,7 @@ structured_query! {
             parameters: (parameter_list
                 (parameter_declaration)* @args
             )
-            (type_qualifier ("const") @immut)?
+            (type_qualifier ("const") @is_const)?
             (noexcept ("noexcept") @noexcept)?
         )
     "#

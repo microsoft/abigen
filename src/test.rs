@@ -234,6 +234,7 @@ macro_rules! gen_test(
                 let uqname = name.iter().last().unwrap();
                 let expected_class = expected::PARSED.get(uqname).unwrap_or_else(|| panic!("No expected '{uqname}'"));
                 let actual_class = actual::PARSED.get(uqname).unwrap_or_else(|| panic!("No actual '{uqname}'"));
+
                 assert_eq!(
                     expected_class.methods.iter().find(|m| m.decl.name == stringify!($method))
                         .expect(concat!("No expected '", stringify!($method), "'")),
@@ -265,7 +266,10 @@ macro_rules! gen_test(
 
             #[test]
             fn h() {
-                let c_name = std::fmt::from_fn(|f| $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)).to_string();
+                let c_name = std::fmt::from_fn(|f| {
+                    $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)
+                }).to_string();
+
                 actual::H_MAP.get(c_name.as_str())
                     .unwrap_or_else(|| panic!("No actual {c_name}"))
                     .diff(
@@ -276,7 +280,10 @@ macro_rules! gen_test(
 
             #[test]
             fn cpp() {
-                let c_name = std::fmt::from_fn(|f| $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)).to_string();
+                let c_name = std::fmt::from_fn(|f| {
+                    $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)
+                }).to_string();
+
                 actual::CPP_MAP.get(c_name.as_str())
                     .unwrap_or_else(|| panic!("No actual {c_name}"))
                     .diff(
@@ -289,5 +296,6 @@ macro_rules! gen_test(
 );
 
 gen_test!(x::y::MyClass::SubClass, do_something);
+gen_test!(x::y::MyClass, ctor);
 gen_test!(x::y::MyClass, config);
 gen_test!(x::y::MyClass, set_config);

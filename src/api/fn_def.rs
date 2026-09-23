@@ -2,7 +2,7 @@ use crate::{
     AbiConfig, ApiClassDef, ApiType, TypeContext, TypeRelation,
     format::{self, fmt_wrap},
     name_concat,
-    query::{FnArg, FnDef},
+    query::{FnArg, FnDef, FnDecl},
 };
 use std::{borrow::Cow, cmp::Ordering, fmt, hash::Hash};
 
@@ -52,7 +52,18 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
             },
             args: value.decl.args.iter().map(|a| a.into()).collect(),
             noexcept: value.decl.noexcept.is_some(),
-            is_const: value.decl.immut.is_some(),
+            is_const: value.decl.is_const.is_some(),
+        }
+    }
+}
+
+impl From<&FnDecl::Match<'_>> for ApiFnDef {
+    fn from(value: &FnDecl::Match<'_>) -> Self {
+        Self {
+            role: ApiFnRole::Constructor,
+            args: value.args.iter().map(|a| a.into()).collect(),
+            noexcept: value.noexcept.is_some(),
+            is_const: value.is_const.is_some(),
         }
     }
 }
@@ -91,8 +102,32 @@ impl ApiFnDef {
         self.body(f, config, class)
     }
 
+    fn is_default_constructor(&self) -> bool {
+        self.role == ApiFnRole::Constructor
+            && self.args.len() == 0
+    }
+
+    fn is_move_constructor_for(&self, class: &ApiClassDef) -> bool {
+        self.role == ApiFnRole::Constructor
+            && self.args.len() == 1
+            && self.args[0].typ.typ == class.name
+            && !self.args[0].typ.is_const
+            && self.args[0].typ.relation == TypeRelation::Owned
+    }
+
+    fn is_copy_constructor_for(&self, class: &ApiClassDef) -> bool {
+        self.role == ApiFnRole::Constructor
+            && self.args.len() == 1
+            && self.args[0].typ.typ == class.name
+            && self.args[0].typ.is_const
+            && self.args[0].typ.relation == TypeRelation::Ref
+    }
+
     fn name_c(&self, f: &mut fmt::Formatter<'_>, class: &ApiClassDef) -> fmt::Result {
         let name = match &self.role {
+            ApiFnRole::Constructor if self.is_default_constructor() => "new_default",
+            ApiFnRole::Constructor if self.is_move_constructor_for(class) => "move",
+            ApiFnRole::Constructor if self.is_copy_constructor_for(class) => "copy",
             ApiFnRole::Constructor => "new",
             ApiFnRole::Destructor => "destroy",
             ApiFnRole::Method { name, .. } => name.as_str(),

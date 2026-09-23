@@ -104,12 +104,11 @@ impl Api {
 
             writeln!(f, "{PRE}")?;
 
-            for class in &self.classes {
+            for class in classes {
                 let mut methods: Vec<_> = class.methods.iter().collect();
                 methods.sort();
-
-                for func in methods {
-                    func.code(f, config, class)?;
+                for method in methods {
+                    method.code(f, config, class)?;
                     writeln!(f)?;
                 }
                 writeln!(f)?;

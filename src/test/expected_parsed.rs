@@ -21,7 +21,7 @@ pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Literal>> = LazyLock
                             typ: "bool",
                             typ_refs: vec![],
                         }],
-                        immut: None,
+                        is_const: None,
                         noexcept: None,
                     },
                 }],
@@ -34,7 +34,7 @@ pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Literal>> = LazyLock
                 ctor: vec![FnDecl::Literal {
                     name: "MyClass",
                     args: vec![],
-                    immut: None,
+                    is_const: None,
                     noexcept: Some("noexcept"),
                 }],
                 methods: vec![
@@ -45,7 +45,7 @@ pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Literal>> = LazyLock
                         decl: FnDecl::Literal {
                             name: "config",
                             args: vec![],
-                            immut: Some("const"),
+                            is_const: Some("const"),
                             noexcept: Some("noexcept"),
                         },
                     },
@@ -61,7 +61,7 @@ pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Literal>> = LazyLock
                                 typ: "z::Config",
                                 typ_refs: vec![FnArgRef::Literal { r: "&" }],
                             }],
-                            immut: None,
+                            is_const: None,
                             noexcept: None,
                         },
                     },
