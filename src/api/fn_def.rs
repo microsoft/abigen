@@ -1,10 +1,10 @@
 use crate::{
-    AbiConfig, ApiClassDef, ApiType, TypeContext, TypeRelation,
+    AbiConfig, ApiClassDef, ApiFnArg, ApiType, TypeContext, TypeRelation,
     format::{self, fmt_wrap},
     name_concat,
-    query::{FnArg, FnDef, FnDecl},
+    query::{FnDef, FnDecl},
 };
-use std::{borrow::Cow, cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
+use std::{cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ApiFnRole {
@@ -64,12 +64,24 @@ impl ApiFnRole {
 pub struct ApiFnDef {
     pub role: ApiFnRole,
     pub args: Vec<ApiFnArg>,
+
+    /// If this function expects a class instance reference, this will contain it.
+    pub self_arg: Option<ApiFnArg>,
+
+    /// If this function is expected to return a value, this will contain its type. May be applied either as a return
+    /// value or an "out" parameter.
+    pub out_arg: Option<ApiFnArg>,
+
+    /// Whether or not this function needs exception handling.
     pub noexcept: bool,
+
+    /// Whether the self reference is const or not.
     pub is_const: bool,
 }
 
 impl From<&FnDef::Match<'_>> for ApiFnDef {
     fn from(value: &FnDef::Match) -> Self {
+        println!("ApiFnDef from FnDef");
         Self {
             role: ApiFnRole::Method {
                 ret: ApiType::from(value),
@@ -78,17 +90,20 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
             args: value.decl.args.iter().map(|a| a.into()).collect(),
             noexcept: value.decl.noexcept.is_some(),
             is_const: value.decl.is_const.is_some(),
+            ..Default::default()
         }
     }
 }
 
 impl From<&FnDecl::Match<'_>> for ApiFnDef {
     fn from(value: &FnDecl::Match<'_>) -> Self {
+        println!("ApiFnDef from FnDecl");
         Self {
             role: ApiFnRole::Constructor,
             args: value.args.iter().map(|a| a.into()).collect(),
             noexcept: value.noexcept.is_some(),
             is_const: value.is_const.is_some(),
+            ..Default::default()
         }
     }
 }
@@ -105,6 +120,19 @@ impl PartialOrd for ApiFnDef {
     }
 }
 
+impl Default for ApiFnDef {
+    fn default() -> Self {
+        Self {
+            role: ApiFnRole::Method { name: "undefined".into(), ret: ApiType::void() },
+            args: vec![],
+            self_arg: None,
+            out_arg: None,
+            noexcept: false,
+            is_const: false,
+        }
+    }
+}
+
 impl ApiFnDef {
     pub fn header(
         &self,
@@ -113,6 +141,7 @@ impl ApiFnDef {
         class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
+        println!("ApiFnDef::header");
         self.proto(f, config, class, make_unique)?;
         write!(f, ";")
     }
@@ -127,6 +156,12 @@ impl ApiFnDef {
         self.proto(f, config, class, make_unique)?;
         writeln!(f)?;
         self.body(f, config, class)
+    }
+
+    pub(crate) fn needs_trycatch(&self) -> bool {
+        !self.noexcept || self.self_arg.is_some() || self.args.iter().any(|a| {
+            matches!(a.typ.relation, TypeRelation::Ref | TypeRelation::Owned)
+        })
     }
 
     fn name_c(&self, f: &mut fmt::Formatter<'_>, class: &ApiClassDef, make_unique: bool) -> fmt::Result {
@@ -156,24 +191,8 @@ impl ApiFnDef {
         }
     }
 
-    fn args_c<'a>(&'a self, class: &ApiClassDef) -> impl Iterator<Item = Cow<'a, ApiFnArg>> {
-        let mut args: Vec<_> = self.args.iter().map(|a| Cow::Borrowed(a)).collect();
-
-        if let Some(self_arg) = ApiFnArg::self_arg(class, self) {
-            args.insert(0, Cow::Owned(self_arg));
-        }
-
-        if let Some(o) = ApiFnArg::out_arg(class, self) {
-            args.push(Cow::Owned(o));
-        }
-
-        args.into_iter()
-    }
-
-    fn needs_trycatch(&self, class: &ApiClassDef) -> bool {
-        !self.noexcept || self.args_c(class).any(|a| {
-            a.typ.relation == TypeRelation::Ref || a.typ.relation == TypeRelation::Owned
-        })
+    fn args_c(&self) -> impl Iterator<Item = &ApiFnArg> {
+        self.self_arg.iter().chain(self.args.iter()).chain(self.out_arg.iter())
     }
 
     fn proto(
@@ -183,7 +202,7 @@ impl ApiFnDef {
         class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
-        if self.needs_trycatch(class) {
+        if self.needs_trycatch() {
             write!(f, "{}", config.exception.value_type)?;
         } else if let ApiFnRole::Constructor = &self.role {
             ApiType {
@@ -204,7 +223,7 @@ impl ApiFnDef {
         format::delimited(
             f,
             ", ",
-            self.args_c(class).map(|a| fmt_wrap!(a.decl, config, true)),
+            self.args_c().map(|a| fmt_wrap!(a.decl, config, true)),
         )?;
         write!(f, ")")
     }
@@ -218,54 +237,43 @@ impl ApiFnDef {
         writeln!(f, "{{")?;
 
         // null checks
-        for a in self.args_c(class) {
+        for a in self.args_c() {
             a.nullcheck(f, config)?;
             writeln!(f)?;
         }
         writeln!(f)?;
 
         // self cast
-        let selves = match ApiFnArg::self_arg(class, self) {
-            // dtor version
-            Some(mut self_arg @ ApiFnArg { typ: ApiType { relation: TypeRelation::Owned, ..}, ..}) => {
-                // pretend it's a reference to a pointer rather than a flat owned reference
+        if let Some(mut self_arg) = self.self_arg.clone() {
+            let mut self_ref = self_arg.clone();
+            self_ref.name = "self".into();
+
+            // pretend it's a reference to a pointer rather than a flat owned reference
+            if self_arg.typ.relation == TypeRelation::Owned {
                 self_arg.typ.relation = TypeRelation::Ref;
-
-                let mut self_ref = self_arg.clone();
-                self_ref.name = "self".into();
                 self_ref.typ.relation = TypeRelation::Ptr(1);
-                Some((self_ref, self_arg))
-            },
-            // method version
-            Some(self_arg @ ApiFnArg { typ: ApiType { relation: TypeRelation::Ref, ..}, ..}) => {
-                let mut self_ref = self_arg.clone();
-                self_ref.name = "self".into();
-                Some((self_ref, self_arg))
-            },
-            _ => None,
-        };
+            }
 
-        if let Some((def, arg)) = selves {
-            def.decl(f, config, false)?;
+            self_ref.decl(f, config, false)?;
             write!(f, " = ")?;
-            arg.deref(f, config, false)?;
+            self_arg.deref(f, config, false)?;
             writeln!(f, ";")?;
         }
         
         // declare the return value if necessary
-        if let Some(out) = ApiFnArg::out_arg(class, self) && !out.is_out {
+        if let Some(out) = &self.out_arg && !out.is_out {
             out.decl(f, config, true)?;
             writeln!(f)?;
         }
 
-        if self.needs_trycatch(class) {
+        if self.needs_trycatch() {
             self.body_try_exec(f, config, class)?;
         } else {
             self.body_exec(f, config, class)?;
         }
         writeln!(f)?;
 
-        
+
 
         write!(f, "}}")
     }
@@ -326,143 +334,5 @@ impl ApiFnDef {
                 }
             }
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ApiFnArg {
-    pub typ: ApiType,
-    pub name: String,
-    pub is_out: bool,
-}
-
-impl From<&FnArg::Match<'_>> for ApiFnArg {
-    fn from(value: &FnArg::Match) -> Self {
-        Self {
-            typ: ApiType::from(value),
-            name: value.name.as_str().to_string(),
-            is_out: false,
-        }
-    }
-}
-
-impl<'a> Into<Cow<'a, ApiFnArg>> for ApiFnArg {
-    fn into(self) -> Cow<'a, ApiFnArg> {
-        Cow::Owned(self)
-    }
-}
-impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
-    fn into(self) -> Cow<'a, ApiFnArg> {
-        Cow::Borrowed(self)
-    }
-}
-
-impl ApiFnArg {
-    fn self_arg(class_def: &ApiClassDef, method_def: &ApiFnDef) -> Option<Self> {
-        match &method_def.role {
-            ApiFnRole::Constructor => None,
-            ApiFnRole::Destructor => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Owned,
-                },
-                name: "self_ptr".into(),
-                is_out: false,
-            }),
-            ApiFnRole::Method { .. } => Some(Self {
-                typ: ApiType {
-                    is_const: method_def.is_const,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Ref,
-                },
-                name: "self_ptr".to_string(),
-                is_out: false,
-            }),
-        }
-    }
-
-    fn out_arg(class_def: &ApiClassDef, method_def: &ApiFnDef) -> Option<Self> {
-        match &method_def.role {
-            ApiFnRole::Constructor if method_def.noexcept => None,
-            ApiFnRole::Constructor => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Owned,
-                },
-                name: "out".into(),
-                is_out: true,
-            }),
-            ApiFnRole::Destructor => None,
-            ApiFnRole::Method { ret, .. } if ret.is_void() => None,
-            ApiFnRole::Method { ret, .. } => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: ret.typ.clone(),
-                    relation: ret.relation,
-                },
-                name: "out".into(),
-                is_out: method_def.needs_trycatch(class_def),
-            }),
-        }
-    }
-
-    fn nullcheck(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
-        let ctx = if self.is_out {
-            TypeContext::OutArg
-        } else {
-            TypeContext::Outbound
-        };
-        let depth = self.typ.relation.nullcheck_depth(ctx);
-        for i in 0..depth {
-            write!(
-                f,
-                "if ({deref}{name} == nullptr) {{ return {nullref_exception}; }}",
-                deref = fmt_wrap!(format::repeat, "*", i),
-                name = self.name,
-                nullref_exception = config.exception.nullref_value,
-            )?;
-            if i < depth - 1 {
-                writeln!(f)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn decl(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        config: &AbiConfig,
-        is_external: bool,
-    ) -> fmt::Result {
-        let ctx = if self.is_out {
-            TypeContext::OutArg
-        } else if is_external {
-            TypeContext::Outbound
-        } else {
-            TypeContext::Inbound
-        };
-        self.typ.decl(f, config, ctx)?;
-        write!(f, " {}", self.name)
-    }
-
-    /// Write
-    fn deref(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        config: &AbiConfig,
-        is_external: bool,
-    ) -> fmt::Result {
-        let ctx = if self.is_out {
-            TypeContext::OutArg
-        } else if is_external {
-            TypeContext::Outbound
-        } else {
-            TypeContext::Inbound
-        };
-        self.typ.deref_pre_name(f, config, ctx)?;
-        write!(f, "{}", self.name)?;
-        self.typ.deref_post_name(f, config, ctx)
     }
 }

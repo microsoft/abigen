@@ -1,5 +1,5 @@
 use crate::{AbiConfig, TypeName, format, query};
-use std::fmt;
+use std::{fmt, sync::LazyLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TypeContext {
@@ -11,7 +11,15 @@ pub(crate) enum TypeContext {
     Inbound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+static VOID_T: LazyLock<ApiType> = LazyLock::new(|| {
+    ApiType {
+        typ: TypeName::void().clone(),
+        is_const: false,
+        relation: TypeRelation::Value,
+    }
+});
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiType {
     pub typ: TypeName,
     pub is_const: bool,
@@ -38,17 +46,19 @@ impl From<&query::FnDef::Match<'_>> for ApiType {
     }
 }
 
+impl Default for ApiType {
+    fn default() -> Self {
+        VOID_T.clone()
+    }
+}
+
 impl ApiType {
     pub fn void() -> Self {
-        Self {
-            typ: TypeName::void().clone(),
-            is_const: false,
-            relation: TypeRelation::Value,
-        }
+        VOID_T.clone()
     }
 
     pub fn is_void(&self) -> bool {
-        &self.typ == TypeName::void()
+        *self == *VOID_T
     }
 
     /// Writes the declaration for this type, suitable for function argument or variable declaration.

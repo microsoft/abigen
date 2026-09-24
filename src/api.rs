@@ -9,6 +9,9 @@ use crate::{AbiConfig, Context, Error, format::fmt_wrap, query::ClassDef};
 mod fn_def;
 pub use fn_def::*;
 
+mod fn_arg;
+pub use fn_arg::*;
+
 mod typename;
 pub use typename::*;
 

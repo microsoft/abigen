@@ -1,5 +1,5 @@
 use crate::{
-    ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
+    ApiFnArg, ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
 };
 use std::{cmp::Ordering, collections::HashSet};
 
@@ -36,24 +36,37 @@ impl From<&query::ClassDef::Match<'_>> for ApiClassDef {
             }
         }
 
-        let mut methods: HashSet<_> = value.ctor.iter()
+        let mut methods: Vec<_> = value.ctor.iter()
             .map(ApiFnDef::from)
             .chain(value.methods.iter().map(ApiFnDef::from))
             .collect();
 
         if value.ctor.len() > 0 {
-            methods.insert(ApiFnDef {
+            methods.push(ApiFnDef {
                 role: ApiFnRole::Destructor,
-                args: vec![],
                 noexcept: true,
-                is_const: false,
+                ..Default::default()
             });
         }
-        
-        Self {
-            name: fqns,
-            methods,
+
+        Self::new(fqns, methods)
+    }
+}
+
+impl ApiClassDef {
+    pub fn new(name: impl Into<TypeName>, methods: impl IntoIterator<Item=ApiFnDef>) -> Self {
+        let mut s = Self {
+            name: name.into(),
+            methods: HashSet::new(),
+        };
+
+        for mut m in methods {
+            m.self_arg = ApiFnArg::self_arg(&s, &m);
+            m.out_arg = ApiFnArg::out_arg(&s, &m);
+            s.methods.insert(m);
         }
+
+        s
     }
 }
 

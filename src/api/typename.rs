@@ -34,7 +34,6 @@ impl std::error::Error for TypeParseError {}
 #[derive(
     Debug,
     Clone,
-    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -73,6 +72,12 @@ impl IntoIterator for TypeName {
     type IntoIter = std::vec::IntoIter<Self::Item>;
     fn into_iter(self) -> Self::IntoIter {
         self.parts.into_iter()
+    }
+}
+
+impl Default for TypeName {
+    fn default() -> Self {
+        VOID_T.clone()
     }
 }
 
