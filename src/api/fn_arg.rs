@@ -1,10 +1,11 @@
-use crate::{AbiConfig, ApiClassDef, ApiFnDef, ApiFnRole, ApiType, TypeRelation, TypeContext, format, query::FnArg};
+use crate::{AbiConfig, ApiType, TypeContext, format, query::FnArg};
 use std::{borrow::Cow, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnArg {
     pub typ: ApiType,
     pub name: String,
+    /// False for normal arguments and [ApiFnDef::out_arg]s as return values. True for out_args as parameters.
     pub is_out: bool,
 }
 
@@ -30,56 +31,6 @@ impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
 }
 
 impl ApiFnArg {
-    pub(crate) fn self_arg(class_def: &ApiClassDef, method_def: &ApiFnDef) -> Option<Self> {
-        match &method_def.role {
-            ApiFnRole::Constructor => None,
-            ApiFnRole::Destructor => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Owned,
-                },
-                name: "self_ptr".into(),
-                is_out: false,
-            }),
-            ApiFnRole::Method { .. } => Some(Self {
-                typ: ApiType {
-                    is_const: method_def.is_const,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Ref,
-                },
-                name: "self_ptr".to_string(),
-                is_out: false,
-            }),
-        }
-    }
-
-    pub(crate) fn out_arg(class_def: &ApiClassDef, method_def: &ApiFnDef) -> Option<Self> {
-        match &method_def.role {
-            ApiFnRole::Constructor if method_def.noexcept => None,
-            ApiFnRole::Constructor => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: class_def.name.clone(),
-                    relation: TypeRelation::Owned,
-                },
-                name: "out".into(),
-                is_out: true,
-            }),
-            ApiFnRole::Destructor => None,
-            ApiFnRole::Method { ret, .. } if ret.is_void() => None,
-            ApiFnRole::Method { ret, .. } => Some(Self {
-                typ: ApiType {
-                    is_const: false,
-                    typ: ret.typ.clone(),
-                    relation: ret.relation,
-                },
-                name: "out".into(),
-                is_out: method_def.needs_trycatch(),
-            }),
-        }
-    }
-
     pub(crate) fn nullcheck(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         let ctx = if self.is_out {
             TypeContext::OutArg

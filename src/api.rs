@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::{AbiConfig, Context, Error, format::fmt_wrap, query::ClassDef};
+use crate::{AbiConfig, Context, Error, query::ClassDef};
 
 mod fn_def;
 pub use fn_def::*;
@@ -76,33 +76,13 @@ impl Api {
             writeln!(f, "{PRE}")?;
 
             for class in &classes {
-                let name = &class.name;
-                writeln!(
-                    f,
-                    "typedef struct {name} {name};",
-                    name = fmt_wrap!(name.pascal_case),
-                )?;
+                class.opaque_struct(f)?;
+                writeln!(f)?;
             }
-
             writeln!(f)?;
 
             for class in &classes {
-                let mut methods: Vec<_> = class.methods.iter().collect();
-                methods.sort();
-
-                let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
-                    if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
-                        || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
-                        Some(methods[i])
-                    } else {
-                        None
-                    }
-                }).collect();
-
-                for method in methods {
-                    method.header(f, config, class, needs_unique.contains(method))?;
-                    writeln!(f)?;
-                }
+                class.header_methods(f, config)?;
                 writeln!(f)?;
             }
 
@@ -118,22 +98,7 @@ impl Api {
             writeln!(f, "{PRE}")?;
 
             for class in classes {
-                let mut methods: Vec<_> = class.methods.iter().collect();
-                methods.sort();
-
-                let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
-                    if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
-                        || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
-                        Some(methods[i])
-                    } else {
-                        None
-                    }
-                }).collect();
-
-                for method in methods {
-                    method.code(f, config, class, needs_unique.contains(method))?;
-                    writeln!(f)?;
-                }
+                class.code_methods(f, config)?;
                 writeln!(f)?;
             }
 

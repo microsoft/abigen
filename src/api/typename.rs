@@ -87,7 +87,7 @@ impl TypeName {
     }
 
     pub fn new() -> Self {
-        Self::default()
+        Self { parts: vec![] }
     }
 
     pub fn from_node(node: ContextNode<'_>) -> Result<Self, TypeParseError> {

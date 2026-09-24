@@ -272,8 +272,6 @@ macro_rules! gen_test(
                     dbg!(&parts);
                     $crate::TypeName::from_iter(parts).snake_case(f)
                 }).to_string();
-                let _: &HashMap<_, _> = &actual::H_MAP;
-                dbg!(&actual::H_MAP);
 
                 actual::H_MAP.get(c_name.as_str())
                     .unwrap_or_else(|| panic!("No actual {c_name}"))

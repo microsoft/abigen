@@ -1,12 +1,13 @@
 use crate::{
-    ApiFnArg, ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
+    AbiConfig, ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
 };
-use std::{cmp::Ordering, collections::HashSet};
+use std::{cmp::Ordering, collections::HashSet, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiClassDef {
     pub name: TypeName,
     pub methods: HashSet<ApiFnDef>,
+
 }
 
 impl From<&query::ClassDef::Match<'_>> for ApiClassDef {
@@ -53,23 +54,6 @@ impl From<&query::ClassDef::Match<'_>> for ApiClassDef {
     }
 }
 
-impl ApiClassDef {
-    pub fn new(name: impl Into<TypeName>, methods: impl IntoIterator<Item=ApiFnDef>) -> Self {
-        let mut s = Self {
-            name: name.into(),
-            methods: HashSet::new(),
-        };
-
-        for mut m in methods {
-            m.self_arg = ApiFnArg::self_arg(&s, &m);
-            m.out_arg = ApiFnArg::out_arg(&s, &m);
-            s.methods.insert(m);
-        }
-
-        s
-    }
-}
-
 impl Ord for ApiClassDef {
     fn cmp(&self, other: &Self) -> Ordering {
         self.name.cmp(&other.name)
@@ -85,5 +69,71 @@ impl PartialOrd for ApiClassDef {
 impl std::hash::Hash for ApiClassDef {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
+    }
+}
+
+impl ApiClassDef {
+    pub fn new(name: impl Into<TypeName>, methods: impl IntoIterator<Item=ApiFnDef>) -> Self {
+        let mut s = Self {
+            name: name.into(),
+            methods: HashSet::new(),
+        };
+
+        for mut m in methods {
+            m.set_implicit_args(&s.name);
+            s.methods.insert(m);
+        }
+
+        s
+    }
+
+    pub(crate) fn opaque_struct(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "typedef struct ")?;
+        self.name.pascal_case(f)?;
+        write!(f, " ")?;
+        self.name.pascal_case(f)?;
+        write!(f, ";")
+    }
+
+    pub(crate) fn header_methods(&self, f: &mut fmt::Formatter, config: &AbiConfig) -> fmt::Result {
+        let mut methods: Vec<_> = self.methods.iter().collect();
+        methods.sort();
+
+        let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
+            if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
+                || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
+                Some(methods[i])
+            } else {
+                None
+            }
+        }).collect();
+
+        for method in methods {
+            method.header(f, config, needs_unique.contains(method))?;
+            writeln!(f)?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn code_methods(&self, f: &mut fmt::Formatter, config: &AbiConfig) -> fmt::Result {
+        let mut methods: Vec<_> = self.methods.iter().collect();
+        methods.sort();
+
+        let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
+            if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
+                || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
+                Some(methods[i])
+            } else {
+                None
+            }
+        }).collect();
+
+        for method in methods {
+            method.code(f, config, needs_unique.contains(method))?;
+            writeln!(f)?;
+        }
+
+        Ok(())
     }
 }

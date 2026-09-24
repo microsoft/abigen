@@ -1,8 +1,5 @@
 use crate::{
-    AbiConfig, ApiClassDef, ApiFnArg, ApiType, TypeContext, TypeRelation,
-    format::{self, fmt_wrap},
-    name_concat,
-    query::{FnDef, FnDecl},
+    AbiConfig, ApiFnArg, ApiType, TypeContext, TypeName, TypeRelation, format::{self, fmt_wrap}, name_concat, query::{FnDecl, FnDef},
 };
 use std::{cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
 
@@ -62,7 +59,10 @@ impl ApiFnRole {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnDef {
+    pub class_name: TypeName,
+
     pub role: ApiFnRole,
+    
     pub args: Vec<ApiFnArg>,
 
     /// If this function expects a class instance reference, this will contain it.
@@ -123,6 +123,7 @@ impl PartialOrd for ApiFnDef {
 impl Default for ApiFnDef {
     fn default() -> Self {
         Self {
+            class_name: TypeName::new(),
             role: ApiFnRole::Method { name: "undefined".into(), ret: ApiType::void() },
             args: vec![],
             self_arg: None,
@@ -138,11 +139,9 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
-        println!("ApiFnDef::header");
-        self.proto(f, config, class, make_unique)?;
+        self.proto(f, config, make_unique)?;
         write!(f, ";")
     }
 
@@ -150,12 +149,11 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
-        self.proto(f, config, class, make_unique)?;
+        self.proto(f, config, make_unique)?;
         writeln!(f)?;
-        self.body(f, config, class)
+        self.body(f, config)
     }
 
     pub(crate) fn needs_trycatch(&self) -> bool {
@@ -164,7 +162,56 @@ impl ApiFnDef {
         })
     }
 
-    fn name_c(&self, f: &mut fmt::Formatter<'_>, class: &ApiClassDef, make_unique: bool) -> fmt::Result {
+    pub(crate) fn set_implicit_args(&mut self, class_name: &TypeName) {
+        self.class_name = class_name.clone();
+        self.self_arg = match &self.role {
+            ApiFnRole::Constructor => None,
+            ApiFnRole::Destructor => Some(ApiFnArg {
+                typ: ApiType {
+                    is_const: false,
+                    typ: self.class_name.clone(),
+                    relation: TypeRelation::Owned,
+                },
+                name: "self_ptr".into(),
+                is_out: false,
+            }),
+            ApiFnRole::Method { .. } => Some(ApiFnArg {
+                typ: ApiType {
+                    is_const: self.is_const,
+                    typ: self.class_name.clone(),
+                    relation: TypeRelation::Ref,
+                },
+                name: "self_ptr".to_string(),
+                is_out: false,
+            }),
+        };
+
+        self.out_arg = match &self.role {
+            ApiFnRole::Constructor if self.noexcept => None,
+            ApiFnRole::Constructor => Some(ApiFnArg {
+                typ: ApiType {
+                    is_const: false,
+                    typ: self.class_name.clone(),
+                    relation: TypeRelation::Owned,
+                },
+                name: "out".into(),
+                is_out: true,
+            }),
+            ApiFnRole::Destructor => None,
+            ApiFnRole::Method { ret, .. } if ret.is_void() => None,
+            ApiFnRole::Method { ret, .. } => Some(ApiFnArg {
+                typ: ApiType {
+                    is_const: false,
+                    typ: ret.typ.clone(),
+                    relation: ret.relation,
+                },
+                name: "out".into(),
+                is_out: self.needs_trycatch(),
+            }),
+        };
+    }
+
+    fn name_c(&self, f: &mut fmt::Formatter<'_>, make_unique: bool) -> fmt::Result {
         let mut h = DefaultHasher::new();
         match &self.role {
             ApiFnRole::Method { name, ret, .. } => {
@@ -185,9 +232,9 @@ impl ApiFnDef {
         let slug = (&slug[2..6]).to_string();
 
         if make_unique {
-            name_concat!(class.name.iter(), [self.role.as_str(), slug.as_str()]).snake_case(f)
+            name_concat!(self.class_name.iter(), [self.role.as_str(), slug.as_str()]).snake_case(f)
         } else {
-            name_concat!(class.name.iter(), [self.role.as_str()]).snake_case(f)
+            name_concat!(self.class_name.iter(), [self.role.as_str()]).snake_case(f)
         }
     }
 
@@ -199,18 +246,17 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
         make_unique: bool,
     ) -> fmt::Result {
+        // return type
         if self.needs_trycatch() {
             write!(f, "{}", config.exception.value_type)?;
         } else if let ApiFnRole::Constructor = &self.role {
             ApiType {
-                typ: class.name.clone(),
-                is_const: false,
-                relation: TypeRelation::Ptr(1),
-            }
-            .decl(f, config, TypeContext::Outbound)?;
+                typ: self.class_name.clone(),
+                is_const: self.is_const,
+                relation: TypeRelation::Ptr(1)
+            }.decl(f, config, TypeContext::Outbound)?;
         } else if let ApiFnRole::Method { ret, .. } = &self.role {
             ret.decl(f, config, TypeContext::Outbound)?;
         } else {
@@ -218,7 +264,7 @@ impl ApiFnDef {
         }
         write!(f, " ")?;
 
-        self.name_c(f, class, make_unique)?;
+        self.name_c(f, make_unique)?;
         write!(f, "(")?;
         format::delimited(
             f,
@@ -232,7 +278,6 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
     ) -> fmt::Result {
         writeln!(f, "{{")?;
 
@@ -267,9 +312,9 @@ impl ApiFnDef {
         }
 
         if self.needs_trycatch() {
-            self.body_try_exec(f, config, class)?;
+            self.body_try_exec(f, config)?;
         } else {
-            self.body_exec(f, config, class)?;
+            self.body_exec(f, config)?;
         }
         writeln!(f)?;
 
@@ -282,16 +327,15 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
     ) -> fmt::Result {
-        if let Some(out) = ApiFnArg::out_arg(class, self) {
+        if let Some(out) = &self.out_arg {
             out.deref(f, config, false)?;
             write!(f, " = ")?;
             out.typ.default_value(f, config)?;
             writeln!(f, ";")?;
         }
 
-        writeln!(f, "try {{ {} }}", fmt_wrap!(self.body_exec, config, class))?;
+        writeln!(f, "try {{ {} }}", fmt_wrap!(self.body_exec, config))?;
 
         for (catch, ret) in config.exception.custom_values.iter() {
             writeln!(f, "catch ({catch}) {{ return {ret}; }}")?;
@@ -310,7 +354,6 @@ impl ApiFnDef {
         &self,
         f: &mut fmt::Formatter<'_>,
         config: &AbiConfig,
-        class: &ApiClassDef,
     ) -> fmt::Result {
         let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
 
@@ -318,7 +361,7 @@ impl ApiFnDef {
             ApiFnRole::Constructor => Ok(()),
             ApiFnRole::Destructor => Ok(()),
             ApiFnRole::Method { name, .. } => {
-                if let Some(o) = ApiFnArg::out_arg(class, self) {
+                if let Some(o) = &self.out_arg {
                     o.deref(f, config, true)?;
                     write!(f, " = ")?;
                     o.typ.deref_pre_name(f, config, TypeContext::Outbound)?;
