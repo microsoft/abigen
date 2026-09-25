@@ -1,6 +1,9 @@
 use crate::{AbiConfig, ApiType, TypeContext, format, query::FnArg};
 use std::{borrow::Cow, fmt};
 
+#[cfg(doc)]
+use crate::ApiFnDef;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiFnArg {
     pub typ: ApiType,
@@ -42,7 +45,7 @@ impl ApiFnArg {
             write!(
                 f,
                 "if ({deref}{name} == nullptr) {{ return {nullref_exception}; }}",
-                deref = format::fmt_wrap!(format::repeat, "*", i),
+                deref = format::fn_wrap!(format::repeat, "*", i),
                 name = self.name,
                 nullref_exception = config.exception.nullref_value,
             )?;

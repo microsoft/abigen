@@ -152,7 +152,6 @@ pub mod actual {
         LazyLock::new(|| Context::from(API.header(&CONFIG).to_string()));
 
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
-        dbg!(H_FULL.root());
         HeaderDecl::Match::from_node(H_FULL.root())
             .into_iter()
             .map(|m| (m.decl.name.as_str(), m.full))
@@ -269,7 +268,6 @@ macro_rules! gen_test(
             fn h() {
                 let c_name = std::fmt::from_fn(|f| {
                     let parts = [$(stringify!($class_part)),+, stringify!($method)];
-                    dbg!(&parts);
                     $crate::TypeName::from_iter(parts).snake_case(f)
                 }).to_string();
 

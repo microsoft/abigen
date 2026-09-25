@@ -9,7 +9,8 @@ extern "C" {
 
 XYMyClass* x_y_myclass_new()
 {
-    return (XYMyClass*) new x::y::MyClass();
+    XYMyClass* out = (XYMyClass*) new x::y::MyClass();
+    return out;
 }
 
 Result x_y_myclass_destroy(XYMyClass** self_ptr)

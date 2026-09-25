@@ -6,15 +6,15 @@ pub use template::*;
 
 use std::fmt::{self, Display};
 
-macro_rules! fmt_wrap(
-    ($self:ident.$fn:ident $(, $($arg:expr),*)? $(,)?) => {
-        std::fmt::from_fn(move |f| $self.$fn(f $(, $($arg),*)?))
+macro_rules! fn_wrap(
+    ($($func:ident).+ $(, $($arg:expr),*)? $(,)?) => {
+        std::fmt::from_fn(|f| { $($func).+(f $(, $($arg),*)?) })
     };
-    ($fn:expr $(, $($arg:expr),*)? $(,)?) => {
-        std::fmt::from_fn(|f| $fn(f $(, $($arg),*)?))
+    ($func:expr $(, $($arg:expr),*)? $(,)?) => {
+        std::fmt::from_fn(|f| { $func(f $(, $($arg),*)?) })
     };
 );
-pub(crate) use fmt_wrap;
+pub(crate) use fn_wrap;
 
 pub(crate) fn delimited<T: Display>(
     f: &mut fmt::Formatter<'_>,

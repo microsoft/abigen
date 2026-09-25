@@ -180,7 +180,7 @@ use crate::ContextNode;
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::format::fmt_wrap;
+    use crate::format::fn_wrap;
 
     #[test]
     fn concat() {
@@ -197,6 +197,6 @@ mod test {
     #[test]
     fn snake_case() {
         let typ = TypeName::from_iter(["x", "y", "MyClass"]);
-        assert_eq!(fmt_wrap!(typ.snake_case).to_string(), "x_y_myclass");
+        assert_eq!(fn_wrap!(typ.snake_case).to_string(), "x_y_myclass");
     }
 }

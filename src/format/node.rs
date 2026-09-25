@@ -1,6 +1,6 @@
 use crate::{
     ContextCursor, ContextNode,
-    format::{fmt_wrap, repeat},
+    format::{fn_wrap, repeat},
 };
 use std::{
     collections::HashMap,
@@ -75,7 +75,7 @@ pub(crate) fn print_tree<'t>(
     writeln!(
         f,
         "{indent}{node}",
-        indent = fmt_wrap!(repeat, INDENT, cursor.cursor.depth() as usize),
+        indent = fn_wrap!(repeat, INDENT, cursor.cursor.depth() as usize),
         node = NodeFormat {
             node: cursor.node(),
             field: cursor.cursor.field_name(),
@@ -88,7 +88,7 @@ pub(crate) fn print_tree<'t>(
         writeln!(
             f,
             "{indent}+{c} children",
-            indent = fmt_wrap!(repeat, INDENT, config.max_depth),
+            indent = fn_wrap!(repeat, INDENT, config.max_depth),
             c = cursor.node().node.named_child_count(),
         )?;
     } else if cursor.cursor.goto_first_child() {

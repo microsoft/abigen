@@ -1,5 +1,5 @@
 use crate::{
-    AbiConfig, ApiFnArg, ApiType, TypeContext, TypeName, TypeRelation, format::{self, fmt_wrap}, name_concat, query::{FnDecl, FnDef},
+    AbiConfig, ApiFnArg, ApiType, TypeContext, TypeName, TypeRelation, format::{self, fn_wrap}, name_concat, query::{FnDecl, FnDef},
 };
 use std::{cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
 
@@ -81,7 +81,6 @@ pub struct ApiFnDef {
 
 impl From<&FnDef::Match<'_>> for ApiFnDef {
     fn from(value: &FnDef::Match) -> Self {
-        println!("ApiFnDef from FnDef");
         Self {
             role: ApiFnRole::Method {
                 ret: ApiType::from(value),
@@ -97,7 +96,6 @@ impl From<&FnDef::Match<'_>> for ApiFnDef {
 
 impl From<&FnDecl::Match<'_>> for ApiFnDef {
     fn from(value: &FnDecl::Match<'_>) -> Self {
-        println!("ApiFnDef from FnDecl");
         Self {
             role: ApiFnRole::Constructor,
             args: value.args.iter().map(|a| a.into()).collect(),
@@ -164,6 +162,7 @@ impl ApiFnDef {
 
     pub(crate) fn set_implicit_args(&mut self, class_name: &TypeName) {
         self.class_name = class_name.clone();
+
         self.self_arg = match &self.role {
             ApiFnRole::Constructor => None,
             ApiFnRole::Destructor => Some(ApiFnArg {
@@ -187,15 +186,14 @@ impl ApiFnDef {
         };
 
         self.out_arg = match &self.role {
-            ApiFnRole::Constructor if self.noexcept => None,
             ApiFnRole::Constructor => Some(ApiFnArg {
                 typ: ApiType {
                     is_const: false,
                     typ: self.class_name.clone(),
-                    relation: TypeRelation::Owned,
+                    relation: TypeRelation::Ref,
                 },
                 name: "out".into(),
-                is_out: true,
+                is_out: self.needs_trycatch(),
             }),
             ApiFnRole::Destructor => None,
             ApiFnRole::Method { ret, .. } if ret.is_void() => None,
@@ -239,7 +237,7 @@ impl ApiFnDef {
     }
 
     fn args_c(&self) -> impl Iterator<Item = &ApiFnArg> {
-        self.self_arg.iter().chain(self.args.iter()).chain(self.out_arg.iter())
+        self.self_arg.iter().chain(self.args.iter()).chain(self.out_arg.iter().filter(|a| a.is_out))
     }
 
     fn proto(
@@ -269,7 +267,7 @@ impl ApiFnDef {
         format::delimited(
             f,
             ", ",
-            self.args_c().map(|a| fmt_wrap!(a.decl, config, true)),
+            self.args_c().map(|a| fn_wrap!(a.decl, config, true)),
         )?;
         write!(f, ")")
     }
@@ -306,10 +304,10 @@ impl ApiFnDef {
         }
         
         // declare the return value if necessary
-        if let Some(out) = &self.out_arg && !out.is_out {
-            out.decl(f, config, true)?;
-            writeln!(f)?;
-        }
+        // if let Some(out) = &self.out_arg && !out.is_out {
+        //     out.decl(f, config, true)?;
+        //     writeln!(f, ";")?;
+        // }
 
         if self.needs_trycatch() {
             self.body_try_exec(f, config)?;
@@ -318,7 +316,11 @@ impl ApiFnDef {
         }
         writeln!(f)?;
 
-
+        if self.needs_trycatch() {
+            writeln!(f, "return {};", config.exception.success_value)?;
+        } else {
+            writeln!(f, "return out;")?;
+        }
 
         write!(f, "}}")
     }
@@ -335,7 +337,9 @@ impl ApiFnDef {
             writeln!(f, ";")?;
         }
 
-        writeln!(f, "try {{ {} }}", fmt_wrap!(self.body_exec, config))?;
+        write!(f, "try {{ ")?;
+        self.body_exec(f, config)?;
+        writeln!(f, " }}")?;
 
         for (catch, ret) in config.exception.custom_values.iter() {
             writeln!(f, "catch ({catch}) {{ return {ret}; }}")?;
@@ -345,9 +349,7 @@ impl ApiFnDef {
             f,
             "catch (...) {{ return {}; }}",
             config.exception.generic_failure_value
-        )?;
-
-        write!(f, "return {};", config.exception.success_value)
+        )
     }
 
     fn body_exec(
@@ -357,25 +359,30 @@ impl ApiFnDef {
     ) -> fmt::Result {
         let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
 
-        match &self.role {
-            ApiFnRole::Constructor => Ok(()),
-            ApiFnRole::Destructor => Ok(()),
-            ApiFnRole::Method { name, .. } => {
-                if let Some(o) = &self.out_arg {
-                    o.deref(f, config, true)?;
-                    write!(f, " = ")?;
-                    o.typ.deref_pre_name(f, config, TypeContext::Outbound)?;
-                    write!(f, "self.{}(", name)?;
-                    format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
-                    write!(f, ")")?;
-                    o.typ.deref_post_name(f, config, TypeContext::Outbound)?;
-                    write!(f, ";")
-                } else {
-                    write!(f, "self.{}(", name)?;
-                    format::delimited(f, ", ", self.args.iter().map(|a| fmt_wrap!(arg, a)))?;
-                    write!(f, ");")
-                }
-            }
+        match (&self.role, &self.out_arg) {
+            (ApiFnRole::Constructor, Some(o)) => {
+                write!(f, "{out} = {cast} new {name}({args});",
+                    out = fn_wrap!(o.decl, config, true),
+                    cast = fn_wrap!(o.typ.cast, config, TypeContext::Outbound),
+                    name = fn_wrap!(self.class_name.cpp_case),
+                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                )
+            },
+            (ApiFnRole::Destructor, _) => Ok(()),
+            (ApiFnRole::Method { name, .. }, Some(o)) => {
+                write!(f, "{out} = {deref_pre} self.{name}({args}){deref_post};",
+                    out = fn_wrap!(o.deref, config, true),
+                    deref_pre = fn_wrap!(o.typ.deref_pre_name, config, TypeContext::Outbound),
+                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                    deref_post = fn_wrap!(o.typ.deref_post_name, config, TypeContext::Outbound),
+                )
+            },
+            (ApiFnRole::Method { name, .. }, None) => {
+                write!(f, "self.{}(", name)?;
+                format::delimited(f, ", ", self.args.iter().map(|a| fn_wrap!(arg, a)))?;
+                write!(f, ");")
+            },
+            _ => Err(fmt::Error),
         }
     }
 }
