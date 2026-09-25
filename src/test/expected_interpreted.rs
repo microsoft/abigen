@@ -29,6 +29,39 @@ pub static INTERPRETED: LazyLock<HashMap<TypeName, ApiClassDef>> = LazyLock::new
         },
     ]),
     ApiClassDef::new( "x::y::MyClass", [
+        // default constructor
+        ApiFnDef {
+            role: ApiFnRole::Constructor,
+            noexcept: true,
+            ..Default::default()
+        },
+        // move constructor
+        ApiFnDef {
+            role: ApiFnRole::Constructor,
+            args: vec![ApiFnArg {
+                name: "other".into(),
+                typ: ApiType {
+                    typ: "x::y::MyClass".into(),
+                    is_const: false,
+                    relation: TypeRelation::Owned,
+                },
+                is_out: false,
+            }],
+            ..Default::default()
+        },
+        ApiFnDef {
+            role: ApiFnRole::Constructor,
+            args: vec![ApiFnArg {
+                name: "flag".into(),
+                typ: ApiType {
+                    typ: "bool".into(),
+                    is_const: false,
+                    relation: TypeRelation::Value,
+                },
+                is_out: false,
+            }],
+            ..Default::default()
+        },
         ApiFnDef {
             role: ApiFnRole::Constructor,
             noexcept: true,

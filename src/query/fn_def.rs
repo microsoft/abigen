@@ -38,12 +38,16 @@ structured_query! {
             body: (field_declaration_list (
                 ((access_specifier) @variable.builtin (#eq? @variable.builtin "public"))
                 .
-                [(comment) (declaration) (field_declaration)]*
+                [(comment) (declaration) (function_definition) (field_declaration)]*
                 .
                 [
                     (field_declaration) @methods
                     (declaration
                         declarator: (function_declarator) @ctor
+                    )
+                    (function_definition
+                        declarator: (function_declarator) @ctor
+                        (default_method_clause)
                     )
                 ]
             ))

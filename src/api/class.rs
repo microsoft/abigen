@@ -1,13 +1,13 @@
 use crate::{
     AbiConfig, ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
 };
-use std::{cmp::Ordering, collections::HashSet, fmt};
+use std::{cmp::Ordering, collections::{HashMap, HashSet}, fmt};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiClassDef {
     pub name: TypeName,
     pub methods: HashSet<ApiFnDef>,
-
+    pub name_collisions: HashSet<ApiFnRole>,
 }
 
 impl From<&query::ClassDef::Match<'_>> for ApiClassDef {
@@ -77,14 +77,30 @@ impl ApiClassDef {
         let mut s = Self {
             name: name.into(),
             methods: HashSet::new(),
+            name_collisions: HashSet::new(),
         };
 
         for mut m in methods {
-            m.set_implicit_args(&s.name);
+            m.set_implicit_fields(&s.name);
             s.methods.insert(m);
         }
+        s.check_name_collisions();
 
         s
+    }
+
+    pub(crate) fn check_name_collisions(&mut self) {
+        let mut counts = HashMap::new();
+        for method in &self.methods {
+            *counts.entry(&method.role).or_insert(0u32) += 1;
+        }
+        for (name, count) in counts {
+            if self.name_collisions.contains(name) && count < 2 {
+                self.name_collisions.remove(name);
+            } else if count >= 2 {
+                self.name_collisions.insert(name.clone());
+            }
+        }
     }
 
     pub(crate) fn opaque_struct(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -99,17 +115,8 @@ impl ApiClassDef {
         let mut methods: Vec<_> = self.methods.iter().collect();
         methods.sort();
 
-        let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
-            if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
-                || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
-                Some(methods[i])
-            } else {
-                None
-            }
-        }).collect();
-
         for method in methods {
-            method.header(f, config, needs_unique.contains(method))?;
+            method.header(f, config, self.name_collisions.contains(&method.role))?;
             writeln!(f)?;
         }
 
@@ -120,17 +127,8 @@ impl ApiClassDef {
         let mut methods: Vec<_> = self.methods.iter().collect();
         methods.sort();
 
-        let needs_unique: HashSet<_> = (0..methods.len()).filter_map(|i| {
-            if i > 0 && methods[i].role.name_matches(&methods[i-1].role)
-                || i < methods.len() - 1 && methods[i].role.name_matches(&methods[i+1].role) {
-                Some(methods[i])
-            } else {
-                None
-            }
-        }).collect();
-
         for method in methods {
-            method.code(f, config, needs_unique.contains(method))?;
+            method.code(f, config, self.name_collisions.contains(&method.role))?;
             writeln!(f)?;
         }
 

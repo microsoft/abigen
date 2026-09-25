@@ -128,12 +128,16 @@ impl TypeName {
         self.parts.insert(index, part.into());
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &str> {
+    pub fn iter(&self) -> impl ExactSizeIterator + DoubleEndedIterator<Item = &str> {
         self.parts.iter().map(|s| s.as_str())
     }
 
     pub fn len(&self) -> usize {
         self.parts.len()
+    }
+
+    pub fn ends_with(&self, other: &Self) -> bool {
+        self.iter().rev().take(other.len()).eq(other.iter().rev())
     }
 
     pub fn cpp_case(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

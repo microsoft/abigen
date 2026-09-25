@@ -253,44 +253,115 @@ macro_rules! gen_test(
             #[test]
             fn interpreted() {
                 let name = $crate::TypeName::from_iter([$(stringify!($class_part)),+]);
-                let expected_class = expected::INTERPRETED.get(&name).expect(concat!("No expected ", stringify!($($class_part)::+)));
-                let actual_class = actual::INTERPRETED.get(&name).expect(concat!("No actual ", stringify!($($class_part)::+)));
-                let matches = |m: &&$crate::ApiFnDef| -> bool {
-                    m.role.as_str() == stringify!($method)
-                };
+                let expected_class = expected::INTERPRETED.get(&name)
+                    .expect(concat!("No expected ", stringify!($($class_part)::+)));
+                let actual_class = actual::INTERPRETED.get(&name)
+                    .expect(concat!("No actual ", stringify!($($class_part)::+)));
+
                 collection_eq(
-                    actual_class.methods.iter().filter(matches),
-                    expected_class.methods.iter().filter(matches),
+                    actual_class.methods.iter().filter(|m| m.role.as_str() == stringify!($method)),
+                    expected_class.methods.iter().filter(|m| m.role.as_str() == stringify!($method)),
                 );
             }
 
             #[test]
             fn h() {
-                let c_name = std::fmt::from_fn(|f| {
-                    let parts = [$(stringify!($class_part)),+, stringify!($method)];
-                    $crate::TypeName::from_iter(parts).snake_case(f)
-                }).to_string();
+                use $crate::format::fn_wrap;
 
-                actual::H_MAP.get(c_name.as_str())
-                    .unwrap_or_else(|| panic!("No actual {c_name}"))
-                    .diff(
-                        expected::H_MAP.get(c_name.as_str())
-                            .unwrap_or_else(|| panic!("No expected {c_name}"))
-                    ).expect("Mismatch");
+                // find expected names
+                let full_name = $crate::TypeName::from_iter([$(stringify!($class_part)),+, stringify!($method)]);
+                let full_name = fn_wrap!(full_name.snake_case).to_string();
+                let expected_names: HashSet<_> = expected::H_MAP.keys().filter_map(|k| {
+                    if k.starts_with(&full_name) {
+                        Some(*k)
+                    } else {
+                        None
+                    }
+                }).collect();
+
+                // find actual names
+                let class = actual::API.classes.iter().find(|c| {
+                    c.name == $crate::TypeName::from_iter([$(stringify!($class_part)),+])
+                }).expect("No actual class");
+                let method = stringify!($method);
+                let actual_names: HashSet<_> = class.methods.iter()
+                    .filter_map(|m| {
+                        if m.role.as_str() == method {
+                            Some(fn_wrap!(m.name_c, class.name_collisions.contains(&m.role)).to_string())
+                        } else {
+                            None
+                        }
+                    }).collect();
+
+                collection_eq(&expected_names, &actual_names);
+
+                let mut errors = 0;
+                for name in expected_names {
+                    let r = actual::H_MAP.get(name)
+                        .unwrap_or_else(|| panic!("No actual {name}"))
+                        .diff(
+                            expected::H_MAP.get(name)
+                                .unwrap_or_else(|| panic!("No expected {name}"))
+                        );
+                    if let Err(e) = r {
+                        eprintln!("Error in {name}:\n{e}\n");
+                        errors += 1;
+                    }
+                }
+
+                if errors > 0 {
+                    panic!("Mismatch");
+                }
             }
 
             #[test]
             fn cpp() {
-                let c_name = std::fmt::from_fn(|f| {
-                    $crate::name_concat!([$(stringify!($class_part)),+], [stringify!($method)]).snake_case(f)
-                }).to_string();
+                use $crate::format::fn_wrap;
 
-                actual::CPP_MAP.get(c_name.as_str())
-                    .unwrap_or_else(|| panic!("No actual {c_name}"))
-                    .diff(
-                        expected::CPP_MAP.get(c_name.as_str())
-                            .unwrap_or_else(|| panic!("No expected {c_name}"))
-                    ).expect("Mismatch");
+                // find expected names
+                let full_name = $crate::TypeName::from_iter([$(stringify!($class_part)),+, stringify!($method)]);
+                let full_name = fn_wrap!(full_name.snake_case).to_string();
+                let expected_names: HashSet<_> = expected::CPP_MAP.keys().filter_map(|k| {
+                    if k.starts_with(&full_name) {
+                        Some(*k)
+                    } else {
+                        None
+                    }
+                }).collect();
+
+                // find actual names
+                let class = actual::API.classes.iter().find(|c| {
+                    c.name == $crate::TypeName::from_iter([$(stringify!($class_part)),+])
+                }).expect("No actual class");
+                let method = stringify!($method);
+                let actual_names: HashSet<_> = class.methods.iter()
+                    .filter_map(|m| {
+                        if m.role.as_str() == method {
+                            Some(fn_wrap!(m.name_c, class.name_collisions.contains(&m.role)).to_string())
+                        } else {
+                            None
+                        }
+                    }).collect();
+
+                collection_eq(&expected_names, &actual_names);
+
+                let mut errors = 0;
+                for name in expected_names {
+                    let r = actual::CPP_MAP.get(name)
+                        .unwrap_or_else(|| panic!("No actual {name}"))
+                        .diff(
+                            expected::CPP_MAP.get(name)
+                                .unwrap_or_else(|| panic!("No expected {name}"))
+                        );
+                    if let Err(e) = r {
+                        eprintln!("Error in {name}:\n{e}\n");
+                        errors += 1;
+                    }
+                }
+
+                if errors > 0 {
+                    panic!("Mismatch");
+                }
             }
         }
     };

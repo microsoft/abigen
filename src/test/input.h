@@ -21,6 +21,9 @@ namespace x::y
 
     public:
         MyClass() noexcept;
+        MyClass(const MyClass& other) = delete;
+        MyClass(MyClass&& other) = default;
+        MyClass(bool flag);
 
         const z::Config& config() const noexcept;
         void set_config(const z::Config& config);

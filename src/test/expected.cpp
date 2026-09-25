@@ -1,5 +1,6 @@
 #include "expected.h"
 #include "input.h"
+#include <utility>
 
 // @abigen:start
 
@@ -7,10 +8,39 @@
 extern "C" {
 #endif
 
-XYMyClass* x_y_myclass_new()
+XYMyClass* x_y_myclass_new_b661()
 {
     XYMyClass* out = (XYMyClass*) new x::y::MyClass();
     return out;
+}
+
+Result x_y_myclass_new_4f4a(int flag, XYMyClass** out)
+{
+    if (out == nullptr) { return Result::ArgumentNull; }
+    *out = nullptr;
+    try {
+        *out = (XYMyClass*) new x::y::MyClass((bool)flag);
+    } catch (...) {
+        return Result::Unknown;
+    }
+    return Result::Success;
+}
+
+Result x_y_myclass_new_f0ab(XYMyClass** other, XYMyClass** out)
+{
+    if (other == nullptr) { return Result::ArgumentNull; }
+    if (*other == nullptr) { return Result::ArgumentNull; }
+    if (out == nullptr) { return Result::ArgumentNull; }
+
+    *out = nullptr;
+    try {
+        *out = (XYMyClass*) new x::y::MyClass(std::move(**(x::y::MyClass**)other));
+    } catch (...) {
+        return Result::Unknown;
+    }
+
+    *other = nullptr;
+    return Result::Success;
 }
 
 Result x_y_myclass_destroy(XYMyClass** self_ptr)

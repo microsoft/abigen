@@ -43,15 +43,6 @@ impl PartialOrd for ApiFnRole {
 }
 
 impl ApiFnRole {
-    pub fn name_matches(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Constructor, Self::Constructor) => true,
-            (Self::Destructor, Self::Destructor) => true,
-            (Self::Method { name: s_name, ..}, Self::Method { name: o_name, ..}) => s_name == o_name,
-            _ => false,
-        }
-    }
-
     pub fn as_str(&self) -> &str {
         self.as_ref()
     }
@@ -160,8 +151,17 @@ impl ApiFnDef {
         })
     }
 
-    pub(crate) fn set_implicit_args(&mut self, class_name: &TypeName) {
+    pub(crate) fn set_implicit_fields(&mut self, class_name: &TypeName) {
         self.class_name = class_name.clone();
+
+        for a in self.args.iter_mut() {
+            if class_name.ends_with(&a.typ.typ) {
+                a.typ.typ = class_name.clone();
+            }
+        }
+        if let ApiFnRole::Method { ret, .. } = &mut self.role && class_name.ends_with(&ret.typ) {
+            ret.typ = class_name.clone();
+        }
 
         self.self_arg = match &self.role {
             ApiFnRole::Constructor => None,
@@ -209,7 +209,7 @@ impl ApiFnDef {
         };
     }
 
-    fn name_c(&self, f: &mut fmt::Formatter<'_>, make_unique: bool) -> fmt::Result {
+    pub(crate) fn name_c(&self, f: &mut fmt::Formatter<'_>, make_unique: bool) -> fmt::Result {
         let mut h = DefaultHasher::new();
         match &self.role {
             ApiFnRole::Method { name, ret, .. } => {
