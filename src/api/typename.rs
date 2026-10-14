@@ -34,7 +34,6 @@ impl std::error::Error for TypeParseError {}
 #[derive(
     Debug,
     Clone,
-    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -76,13 +75,19 @@ impl IntoIterator for TypeName {
     }
 }
 
+impl Default for TypeName {
+    fn default() -> Self {
+        VOID_T.clone()
+    }
+}
+
 impl TypeName {
     pub fn void() -> &'static Self {
         &VOID_T
     }
 
     pub fn new() -> Self {
-        Self::default()
+        Self { parts: vec![] }
     }
 
     pub fn from_node(node: ContextNode<'_>) -> Result<Self, TypeParseError> {
@@ -123,12 +128,16 @@ impl TypeName {
         self.parts.insert(index, part.into());
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &str> {
+    pub fn iter(&self) -> impl ExactSizeIterator + DoubleEndedIterator<Item = &str> {
         self.parts.iter().map(|s| s.as_str())
     }
 
     pub fn len(&self) -> usize {
         self.parts.len()
+    }
+
+    pub fn ends_with(&self, other: &Self) -> bool {
+        self.iter().rev().take(other.len()).eq(other.iter().rev())
     }
 
     pub fn cpp_case(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -165,7 +174,7 @@ macro_rules! name_concat(
     ($first:expr $(, $part:expr)* $(,)?) => {
         $first.into_iter().map(|p| String::from(p))
         .$(chain($part.into_iter().map(|p| String::from(p)))).+
-        .collect::<$crate::api::typename::TypeName>()
+        .collect::<$crate::TypeName>()
     };
 );
 pub(crate) use name_concat;
@@ -175,7 +184,7 @@ use crate::ContextNode;
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::format::fmt_wrap;
+    use crate::format::fn_wrap;
 
     #[test]
     fn concat() {
@@ -192,6 +201,6 @@ mod test {
     #[test]
     fn snake_case() {
         let typ = TypeName::from_iter(["x", "y", "MyClass"]);
-        assert_eq!(fmt_wrap!(typ.snake_case).to_string(), "x_y_myclass");
+        assert_eq!(fn_wrap!(typ.snake_case).to_string(), "x_y_myclass");
     }
 }

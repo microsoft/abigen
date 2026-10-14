@@ -1,6 +1,6 @@
 use crate::{
-    AbiConfig, Api, ApiFnDef, Context, ContextNode, Template,
-    query::{FnDef, structured_query},
+    AbiConfig, Api, ApiClassDef, Context, ContextNode, Template,
+    query::{ClassDef, structured_query},
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -23,21 +23,16 @@ pub static CONFIG: LazyLock<AbiConfig> = LazyLock::new(|| {
 });
 
 structured_query! {
-    /// Find function declarations in a header file
     name: HeaderDecl,
     fields: {
-        /// The name of the function being declared
-        name: _,
-        /// The node of the overall declaration
+        decl: (FnDecl),
         full: _,
     },
     query: r#"
         (declaration
-            declarator: (function_declarator
-                declarator: (identifier) @name
-            )
+            declarator: (_) @decl
         ) @full
-    "#,
+    "#
 }
 
 structured_query! {
@@ -45,17 +40,27 @@ structured_query! {
     name: CodeDef,
     fields: {
         /// The name of the function being declared
-        name: _,
+        def: (FnDecl),
         /// The node of the overall declaration
         full: _,
     },
     query: r#"
         (function_definition
-            declarator: (function_declarator
-                declarator: (identifier) @name
-            )
+            declarator: (_) @def
         ) @full
     "#,
+}
+
+structured_query! {
+    name: FnDecl,
+    fields: {
+        name: _,
+    },
+    query: r#"
+        (function_declarator
+            declarator: (identifier) @name
+        )
+    "#
 }
 
 pub mod input {
@@ -96,7 +101,7 @@ pub mod expected {
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
         HeaderDecl::Match::from_node(H_TEMPLATED.root())
             .into_iter()
-            .map(|m| (m.name.as_str(), m.full))
+            .map(|m| (m.decl.name.as_str(), m.full))
             .collect()
     });
 
@@ -108,26 +113,32 @@ pub mod expected {
         LazyLock::new(|| {
             CodeDef::Match::from_node(CPP_TEMPLATED.root())
                 .into_iter()
-                .map(|m| (m.name.as_str(), m.full))
+                .map(|m| (m.def.name.as_str(), m.full))
                 .collect()
         });
 }
 
 pub mod actual {
     use super::*;
+    use crate::TypeName;
 
-    pub static PARSED: LazyLock<HashMap<&'static str, FnDef::Match<'static>>> =
+    /// Maps the unqualified class name to its query structure
+    pub static PARSED: LazyLock<HashMap<&'static str, ClassDef::Match<'static>>> =
         LazyLock::new(|| {
-            FnDef::Match::from_node(input::CTX.root())
+            ClassDef::Match::from_node(input::CTX.root())
                 .into_iter()
-                .map(|m| (m.decl.name.as_str(), m))
+                .map(|m| (m.name.as_str(), m))
                 .collect()
         });
 
-    pub static INTERPRETED: LazyLock<HashMap<&'static str, ApiFnDef>> = LazyLock::new(|| {
+    /// Maps the fully qualified class name to its api structure
+    pub static INTERPRETED: LazyLock<HashMap<TypeName, ApiClassDef>> = LazyLock::new(|| {
         PARSED
-            .iter()
-            .map(|(name, m)| (*name, ApiFnDef::from(m)))
+            .values()
+            .map(|m| {
+                let m = ApiClassDef::from(m);
+                (m.name.clone(), m)
+            })
             .collect()
     });
 
@@ -143,7 +154,7 @@ pub mod actual {
     pub static H_MAP: LazyLock<HashMap<&'static str, ContextNode<'static>>> = LazyLock::new(|| {
         HeaderDecl::Match::from_node(H_FULL.root())
             .into_iter()
-            .map(|m| (m.name.as_str(), m.full))
+            .map(|m| (m.decl.name.as_str(), m.full))
             .collect()
     });
 
@@ -159,7 +170,7 @@ pub mod actual {
         LazyLock::new(|| {
             CodeDef::Match::from_node(CPP_FULL.root())
                 .into_iter()
-                .map(|m| (m.name.as_str(), m.full))
+                .map(|m| (m.def.name.as_str(), m.full))
                 .collect()
         });
 
@@ -216,51 +227,148 @@ fn code() {
 }
 
 macro_rules! gen_test(
-    ($cpp_name:ident, $c_name:ident) => {
+    ($($class_part:ident)::+, $method:ident) => {
         #[cfg(test)]
-        mod $cpp_name {
+        mod $method {
             #[allow(unused)]
             use super::*;
 
             #[test]
             fn parsed() {
-                assert_eq!(
-                    expected::PARSED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    actual::PARSED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
-                );
+                let name = $crate::TypeName::from_iter([$(stringify!($class_part)),+]);
+                let uqname = name.iter().last().unwrap();
+                let expected_class = expected::PARSED.get(uqname).unwrap_or_else(|| panic!("No expected '{uqname}'"));
+                let actual_class = actual::PARSED.get(uqname).unwrap_or_else(|| panic!("No actual '{uqname}'"));
+
+                if stringify!($method) == "new" {
+                    collection_eq(&actual_class.ctor, &expected_class.ctor);
+                } else {
+                    collection_eq(
+                        actual_class.methods.iter().filter(|m| m.decl.name.as_str() == stringify!($method)),
+                        expected_class.methods.iter().filter(|m| m.decl.name == stringify!($method)),
+                    );
+                }
             }
 
             #[test]
             fn interpreted() {
-                assert_eq!(
-                    expected::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No expected ", stringify!($cpp_name))),
-                    actual::INTERPRETED.get(stringify!($cpp_name)).expect(concat!("No actual ", stringify!($cpp_name))),
+                let name = $crate::TypeName::from_iter([$(stringify!($class_part)),+]);
+                let expected_class = expected::INTERPRETED.get(&name)
+                    .expect(concat!("No expected ", stringify!($($class_part)::+)));
+                let actual_class = actual::INTERPRETED.get(&name)
+                    .expect(concat!("No actual ", stringify!($($class_part)::+)));
+
+                collection_eq(
+                    actual_class.methods.iter().filter(|m| m.role.as_str() == stringify!($method)),
+                    expected_class.methods.iter().filter(|m| m.role.as_str() == stringify!($method)),
                 );
             }
 
             #[test]
             fn h() {
-                actual::H_MAP.get(stringify!($c_name))
-                    .expect(concat!("No actual ", stringify!($cpp_name)))
-                    .diff(
-                        expected::H_MAP.get(stringify!($c_name))
-                            .expect(concat!("No expected ", stringify!($cpp_name)))
-                    ).expect("Mismatch");
+                use $crate::format::fn_wrap;
+
+                // find expected names
+                let full_name = $crate::TypeName::from_iter([$(stringify!($class_part)),+, stringify!($method)]);
+                let full_name = fn_wrap!(full_name.snake_case).to_string();
+                let expected_names: HashSet<_> = expected::H_MAP.keys().filter_map(|k| {
+                    if k.starts_with(&full_name) {
+                        Some(*k)
+                    } else {
+                        None
+                    }
+                }).collect();
+
+                // find actual names
+                let class = actual::API.classes.iter().find(|c| {
+                    c.name == $crate::TypeName::from_iter([$(stringify!($class_part)),+])
+                }).expect("No actual class");
+                let method = stringify!($method);
+                let actual_names: HashSet<_> = class.methods.iter()
+                    .filter_map(|m| {
+                        if m.role.as_str() == method {
+                            Some(fn_wrap!(m.name_c, class.name_collisions.contains(&m.role)).to_string())
+                        } else {
+                            None
+                        }
+                    }).collect();
+
+                collection_eq(&expected_names, &actual_names);
+
+                let mut errors = 0;
+                for name in expected_names {
+                    let r = actual::H_MAP.get(name)
+                        .unwrap_or_else(|| panic!("No actual {name}"))
+                        .diff(
+                            expected::H_MAP.get(name)
+                                .unwrap_or_else(|| panic!("No expected {name}"))
+                        );
+                    if let Err(e) = r {
+                        eprintln!("Error in {name}:\n{e}\n");
+                        errors += 1;
+                    }
+                }
+
+                if errors > 0 {
+                    panic!("Mismatch");
+                }
             }
 
             #[test]
             fn cpp() {
-                actual::CPP_MAP.get(stringify!($c_name))
-                    .expect(concat!("No actual ", stringify!($cpp_name)))
-                    .diff(
-                        expected::CPP_MAP.get(stringify!($c_name))
-                            .expect(concat!("No expected ", stringify!($cpp_name)))
-                    ).expect("Mismatch");
+                use $crate::format::fn_wrap;
+
+                // find expected names
+                let full_name = $crate::TypeName::from_iter([$(stringify!($class_part)),+, stringify!($method)]);
+                let full_name = fn_wrap!(full_name.snake_case).to_string();
+                let expected_names: HashSet<_> = expected::CPP_MAP.keys().filter_map(|k| {
+                    if k.starts_with(&full_name) {
+                        Some(*k)
+                    } else {
+                        None
+                    }
+                }).collect();
+
+                // find actual names
+                let class = actual::API.classes.iter().find(|c| {
+                    c.name == $crate::TypeName::from_iter([$(stringify!($class_part)),+])
+                }).expect("No actual class");
+                let method = stringify!($method);
+                let actual_names: HashSet<_> = class.methods.iter()
+                    .filter_map(|m| {
+                        if m.role.as_str() == method {
+                            Some(fn_wrap!(m.name_c, class.name_collisions.contains(&m.role)).to_string())
+                        } else {
+                            None
+                        }
+                    }).collect();
+
+                collection_eq(&expected_names, &actual_names);
+
+                let mut errors = 0;
+                for name in expected_names {
+                    let r = actual::CPP_MAP.get(name)
+                        .unwrap_or_else(|| panic!("No actual {name}"))
+                        .diff(
+                            expected::CPP_MAP.get(name)
+                                .unwrap_or_else(|| panic!("No expected {name}"))
+                        );
+                    if let Err(e) = r {
+                        eprintln!("Error in {name}:\n{e}\n");
+                        errors += 1;
+                    }
+                }
+
+                if errors > 0 {
+                    panic!("Mismatch");
+                }
             }
         }
     };
 );
 
-gen_test!(do_something, x_y_myclass_subclass_do_something);
-gen_test!(config, x_y_myclass_config);
-gen_test!(set_config, x_y_myclass_set_config);
+gen_test!(x::y::MyClass::SubClass, do_something);
+gen_test!(x::y::MyClass, new);
+gen_test!(x::y::MyClass, destroy);
+gen_test!(x::y::MyClass, config);
+gen_test!(x::y::MyClass, set_config);

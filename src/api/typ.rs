@@ -1,5 +1,5 @@
 use crate::{AbiConfig, TypeName, format, query};
-use std::fmt;
+use std::{fmt, sync::LazyLock};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TypeContext {
@@ -11,44 +11,68 @@ pub(crate) enum TypeContext {
     Inbound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+static VOID_T: LazyLock<ApiType> = LazyLock::new(|| ApiType {
+    typ: TypeName::void().clone(),
+    is_const: false,
+    relation: TypeRelation::Value,
+});
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ApiType {
     pub typ: TypeName,
     pub is_const: bool,
     pub relation: TypeRelation,
 }
 
-impl From<&query::FnArgType::Match<'_>> for ApiType {
-    fn from(value: &query::FnArgType::Match<'_>) -> Self {
+impl From<&query::FnArg::Match<'_>> for ApiType {
+    fn from(value: &query::FnArg::Match<'_>) -> Self {
         Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
+            is_const: value.typ_qual.is_some(),
+            typ: value.typ.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
     }
 }
 
-impl From<&query::FnRetType::Match<'_>> for ApiType {
-    fn from(value: &query::FnRetType::Match<'_>) -> Self {
+impl From<&query::FnDef::Match<'_>> for ApiType {
+    fn from(value: &query::FnDef::Match<'_>) -> Self {
         Self {
-            is_const: value.q.is_some(),
-            typ: value.t.try_into().unwrap(),
+            is_const: value.ret_qual.is_some(),
+            typ: value.ret_typ.try_into().unwrap(),
             relation: TypeRelation::from(value),
         }
+    }
+}
+
+impl Ord for ApiType {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.is_const
+            .cmp(&other.is_const)
+            .reverse()
+            .then(self.typ.cmp(&other.typ))
+            .then(self.relation.cmp(&other.relation))
+    }
+}
+
+impl PartialOrd for ApiType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Default for ApiType {
+    fn default() -> Self {
+        VOID_T.clone()
     }
 }
 
 impl ApiType {
     pub fn void() -> Self {
-        Self {
-            typ: TypeName::void().clone(),
-            is_const: false,
-            relation: TypeRelation::Value,
-        }
+        VOID_T.clone()
     }
 
     pub fn is_void(&self) -> bool {
-        &self.typ == TypeName::void()
+        *self == *VOID_T
     }
 
     /// Writes the declaration for this type, suitable for function argument or variable declaration.
@@ -126,7 +150,9 @@ impl ApiType {
                 write!(f, "const ")?;
             }
             self.typename(f, config, context)?;
-            if self.relation == TypeRelation::Ref {
+            if self.relation == TypeRelation::Ref
+                || self.relation == TypeRelation::Owned && context == TypeContext::Outbound
+            {
                 TypeRelation::Ptr(1).decl(f, context)?;
             } else {
                 self.relation.decl(f, context)?;
@@ -158,39 +184,39 @@ impl ApiType {
 }
 
 /// The level of indirection between a variable's real type and its dereferenced type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum TypeRelation {
-    #[default]
-    Value,
     Ref,
     Owned,
+    #[default]
+    Value,
     Ptr(usize),
 }
 
-impl From<&query::FnArgType::Match<'_>> for TypeRelation {
-    fn from(value: &query::FnArgType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
+impl From<&query::FnArg::Match<'_>> for TypeRelation {
+    fn from(value: &query::FnArg::Match<'_>) -> Self {
+        if value.typ_refs.len() == 0 {
             TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
+        } else if value.typ_refs[0].r.as_str() == "&" {
             TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
+        } else if value.typ_refs[0].r.as_str() == "&&" {
             TypeRelation::Owned
         } else {
-            TypeRelation::Ptr(value.r.len())
+            TypeRelation::Ptr(value.typ_refs.len())
         }
     }
 }
 
-impl From<&query::FnRetType::Match<'_>> for TypeRelation {
-    fn from(value: &query::FnRetType::Match<'_>) -> Self {
-        if value.r.len() == 0 {
+impl From<&query::FnDef::Match<'_>> for TypeRelation {
+    fn from(value: &query::FnDef::Match<'_>) -> Self {
+        if value.ret_refs.len() == 0 {
             TypeRelation::Value
-        } else if value.r[0].r.as_str() == "&" {
+        } else if value.ret_refs[0].r.as_str() == "&" {
             TypeRelation::Ref
-        } else if value.r[0].r.as_str() == "&&" {
+        } else if value.ret_refs[0].r.as_str() == "&&" {
             TypeRelation::Owned
         } else {
-            TypeRelation::Ptr(value.r.len())
+            TypeRelation::Ptr(value.ret_refs.len())
         }
     }
 }
@@ -217,8 +243,8 @@ impl TypeRelation {
             (Self::Ref, TypeContext::Outbound) => write!(f, "*"),
             (Self::Ref, TypeContext::Inbound) => write!(f, "&"),
             (Self::Owned, TypeContext::OutArg) => write!(f, "**"),
-            (Self::Owned, TypeContext::Outbound) => write!(f, "*"),
-            (Self::Owned, TypeContext::Inbound) => write!(f, "&&"),
+            (Self::Owned, TypeContext::Outbound) => write!(f, "**"),
+            (Self::Owned, TypeContext::Inbound) => write!(f, "**"),
             (Self::Ptr(depth), TypeContext::OutArg) => format::repeat(f, "*", depth + 1),
             (Self::Ptr(depth), _) => format::repeat(f, "*", *depth),
         }
@@ -233,6 +259,7 @@ impl TypeRelation {
         match (self, context) {
             (_, TypeContext::OutArg) => write!(f, "*"),
             (Self::Ref, TypeContext::Inbound) => write!(f, "*"),
+            (Self::Owned, TypeContext::Inbound) => write!(f, "**"),
             _ => Ok(()),
         }
     }
@@ -245,7 +272,6 @@ impl TypeRelation {
     ) -> fmt::Result {
         match (self, context) {
             (Self::Ref, TypeContext::Outbound) => write!(f, "&"),
-            (Self::Owned, TypeContext::Inbound) => write!(f, "*"),
             (Self::Owned, TypeContext::Outbound) => write!(f, "&"),
             _ => Ok(()),
         }
@@ -288,8 +314,8 @@ mod test {
         assert_decl!(ref_outbound, ["a::b", Ref, Outbound], "AB* t");
         assert_decl!(ref_outarg, ["a::b", Ref, OutArg], "AB** t");
 
-        assert_decl!(owned_inbound, ["a::b", Owned, Inbound], "a::b&& t");
-        assert_decl!(owned_outbound, ["a::b", Owned, Outbound], "AB* t");
+        assert_decl!(owned_inbound, ["a::b", Owned, Inbound], "a::b** t");
+        assert_decl!(owned_outbound, ["a::b", Owned, Outbound], "AB** t");
         assert_decl!(owned_outarg, ["a::b", Owned, OutArg], "AB** t");
 
         assert_decl!(ptr1_inbound, ["a::b", Ptr(1), Inbound], "a::b* t");
@@ -340,7 +366,7 @@ mod test {
         assert_deref!(
             owned_inbound,
             ["a::b", Owned, Inbound],
-            "std::move((a::b&&)*t)"
+            "std::move(**(a::b**)t)"
         );
         assert_deref!(
             owned_outbound,

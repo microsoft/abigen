@@ -3,8 +3,8 @@ use crate::query::structured_query;
 structured_query! {
     name: pub Template,
     fields: {
-        start: TemplateStart,
-        end: TemplateEnd,
+        start: (TemplateStart),
+        end: (TemplateEnd),
     },
     query: r#"
         (translation_unit) @start @end

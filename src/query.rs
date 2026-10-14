@@ -38,10 +38,10 @@ macro_rules! field_t (
     ([_]) => {
         Vec<$crate::ContextNode<'tree>>
     };
-    ([$($sub_q:ident)::+]) => {
+    ([$(=)? $($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Match<'tree>>
     };
-    ($($sub_q:ident)::+) => {
+    (($(=)? $($sub_q:ident)::+)) => {
         $($sub_q)::+::Match<'tree>
     };
 );
@@ -63,10 +63,46 @@ macro_rules! field_val (
             ).into_iter()
         }).flatten().collect())
     };
-    ($query:expr, $ctx:ident, $m:ident, $f:ident, $($sub_q:ident)::+) => {
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, [=$($sub_q:ident)::+]) => {
+        Some($m.nodes_for_capture_index($query.$f).map(|n| {
+            $($sub_q)::+::Match::from_node_with_options(
+                $ctx.wrap(n),
+                Some(1),
+            ).into_iter()
+        }).flatten().collect())
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, ($($sub_q:ident)::+)) => {
         $($sub_q)::+::Match::from_node(
             $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
         ).into_iter().next()
+    };
+    ($query:expr, $ctx:ident, $m:ident, $f:ident, (=$($sub_q:ident)::+)) => {
+        $($sub_q)::+::Match::from_node_with_options(
+            $ctx.wrap($m.nodes_for_capture_index($query.$f).next().unwrap()),
+            Some(0),
+        ).into_iter().next()
+    };
+);
+
+macro_rules! field_merge (
+    ($dest:ident, $src:ident, $f:ident, _) => {
+        $dest.$f = $src.$f
+    };
+    ($dest:ident, $src:ident, $f:ident, ?) => {
+        $dest.$f = $src.$f
+    };
+    ($dest:ident, $src:ident, $f:ident, [_]) => {
+        for x in $src.$f {
+            $dest.$f.push(x);
+        }
+    };
+    ($dest:ident, $src:ident, $f:ident, [$(=)? $($sub_q:ident)::+]) => {
+        for x in $src.$f {
+            $dest.$f.push(x);
+        }
+    };
+    ($dest:ident, $src:ident, $f:ident, ($(=)? $($sub_q:ident)::+)) => {
+        $dest.$f = $src.$f
     };
 );
 
@@ -80,10 +116,10 @@ macro_rules! test_t (
     ([_]) => {
         Vec<&'tree str>
     };
-    ([$($sub_q:ident)::+]) => {
+    ([$(=)? $($sub_q:ident)::+]) => {
         Vec<$($sub_q)::+::Literal<'tree>>
     };
-    ($($sub_q:ident)::+) => {
+    (($(=)? $($sub_q:ident)::+)) => {
         $($sub_q)::+::Literal<'tree>
     };
 );
@@ -100,13 +136,13 @@ macro_rules! test_eq (
         })
     };
     ($self:ident, $other:ident, $f:ident, [_]) => {
-        $other.$f.iter().zip($self.$f.iter()).all(|(o, s)| o.as_str().is_ok_and(|f| f == *s))
+        $other.$f.iter().zip($self.$f.iter()).all(|(o, s)| o.as_str() == *s)
     };
-    ($self:ident, $other:ident, $f:ident, [$($sub_q:ident)::+]) => {
+    ($self:ident, $other:ident, $f:ident, [$(=)? $($sub_q:ident)::+]) => {
         $self.$f.len() == $other.$f.len()
             && $self.$f.iter().zip($other.$f.iter()).all(|(s, o)| s == o)
     };
-    ($self:ident, $other:ident, $f:ident, $($sub_q:ident)::+) => {
+    ($self:ident, $other:ident, $f:ident, ($(=)? $($sub_q:ident)::+)) => {
         $self.$f == $other.$f
     };
 );
@@ -116,7 +152,9 @@ macro_rules! structured_query {
     $(#[$meta:meta])*
     name: $vis:vis $name:ident,
     fields: {
-        $( $(#[$f_meta:meta])* $field:ident: $field_t:tt ),+ $(,)?
+        $( $(#[$field_meta:meta])* $field:ident: $field_t:tt ),+
+        $( , - $( $(#[$collection_meta:meta])* $collection:ident: $collection_t:tt ),+ )?
+        $(,)?
     },
     query: $query_text:literal $(,)?
 ) => {
@@ -134,7 +172,8 @@ macro_rules! structured_query {
         /// The tree-sitter query and the IDs of all the capture fields
         pub struct Query {
             query: ::tree_sitter::Query,
-            $( $(#[$f_meta])* $field: u32, )*
+            $( $(#[$field_meta])* $field: u32, )+
+            $( $( $(#[$collection_meta])* $collection: u32, )* )?
         }
 
         impl Query {
@@ -144,7 +183,11 @@ macro_rules! structured_query {
                     $(
                         $field: q.capture_index_for_name(stringify!($field))
                             .ok_or_else(|| $crate::query::StructuredQueryError::Capture(stringify!($field)))?
-                    , )*
+                    ,)+
+                    $($(
+                        $collection: q.capture_index_for_name(stringify!($collection))
+                            .ok_or_else(|| $crate::query::StructuredQueryError::Capture(stringify!($collection)))?
+                    ,)*)?
                     query: q,
                 })
             }
@@ -152,22 +195,31 @@ macro_rules! structured_query {
 
         #[derive(Clone, std::hash::Hash)]
         pub struct Match<'tree> {
-            $( $(#[$f_meta])* pub $field : $crate::query::field_t!($field_t), )+
+            $( $(#[$field_meta])* pub $field : $crate::query::field_t!($field_t), )+
+            $($( $(#[$collection_meta])* pub $collection: $crate::query::field_t!($collection_t), )*)?
             byte_range: std::ops::Range<usize>,
         }
 
         impl<'tree> Match<'tree> {
-            pub fn from_node(node: $crate::ContextNode<'tree>)
-                -> Vec<Self> {
+            pub fn from_node(node: $crate::ContextNode<'tree>) -> Vec<Self> {
+                Self::from_node_with_options(node, None)
+            }
+
+            pub fn from_node_with_options(node: $crate::ContextNode<'tree>, max_start_depth: Option<u32>) -> Vec<Self> {
                 use ::tree_sitter::StreamingIterator;
 
                 let mut cursor = ::tree_sitter::QueryCursor::new();
+                cursor.set_max_start_depth(max_start_depth);
                 let mut matches = cursor.matches(&QUERY_INST.query, node.node, node.context.as_str().as_bytes());
-                let mut ret = vec![];
+                let mut ret: Vec<Match<'tree>> = vec![];
 
                 while let Some(m) = matches.next() {
-                    if let Some(m) = Match::from_match(node.context, m) {
-                        ret.push(m);
+                    if let Some(new_match) = Match::from_match(node.context, m) {
+                        if let Some(_old) = ret.iter_mut().find(|old| *old == &new_match) {
+                            $($( $crate::query::field_merge!(_old, new_match, $collection, $collection_t); )*)?
+                        } else {
+                            ret.push(new_match);
+                        }
                     }
                 }
                 ret.sort_by(|a, b| {
@@ -186,8 +238,15 @@ macro_rules! structured_query {
                     }).unwrap();
                 Some(Self {
                     $( $field: $crate::query::field_val!(QUERY_INST, ctx, m, $field, $field_t)?, )+
+                    $($( $collection: $crate::query::field_val!(QUERY_INST, ctx, m, $collection, $collection_t)?, )*)?
                     byte_range,
                 })
+            }
+        }
+
+        impl PartialEq for Match<'_> {
+            fn eq(&self, other: &Match<'_>) -> bool {
+                $( self.$field == other.$field )&&+
             }
         }
 
@@ -195,6 +254,7 @@ macro_rules! structured_query {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, "Match {{ ")?;
                 $( write!(f, "{}: {:?}, ", stringify!($field), self.$field)?; )+
+                $($( write!(f, "{}: {:?}, ", stringify!($collection), self.$collection)?; )*)?
                 write!(f, "}}")?;
                 Ok(())
             }
@@ -203,28 +263,31 @@ macro_rules! structured_query {
         #[allow(unused)]
         #[derive(Debug, Clone, PartialEq, Eq, std::hash::Hash)]
         pub struct Literal<'tree> {
-            $( $(#[$f_meta])* pub $field : $crate::query::test_t!($field_t) ),+
+            $( $(#[$field_meta])* pub $field : $crate::query::test_t!($field_t), )+
+            $($( $(#[$collection_meta])* pub $collection : $crate::query::test_t!($collection_t), )*)?
         }
 
-        impl<'tree> PartialEq<Match<'tree>> for Literal<'tree> {
-            fn eq(&self, other: &Match<'tree>) -> bool {
+        impl PartialEq<Match<'_>> for Literal<'_> {
+            fn eq(&self, other: &Match<'_>) -> bool {
                 [
-                    $( $crate::query::test_eq!(self, other, $field, $field_t) ),+
+                    $( $crate::query::test_eq!(self, other, $field, $field_t), )+
+                    $($( $crate::query::test_eq!(self, other, $collection, $collection_t), )*)?
                 ].into_iter().all(|v| v)
             }
         }
 
-        impl<'tree> PartialEq<Match<'tree>> for &Literal<'tree> {
-            fn eq(&self, other: &Match<'tree>) -> bool {
+        impl PartialEq<Match<'_>> for &Literal<'_> {
+            fn eq(&self, other: &Match<'_>) -> bool {
                 [
-                    $( $crate::query::test_eq!(self, other, $field, $field_t) ),+
+                    $( $crate::query::test_eq!(self, other, $field, $field_t), )+
+                    $($( $crate::query::test_eq!(self, other, $collection, $collection_t), )*)?
                 ].into_iter().all(|v| v)
             }
         }
     }
 };
 }
-pub(crate) use {field_t, field_val, structured_query, test_eq, test_t};
+pub(crate) use {field_merge, field_t, field_val, structured_query, test_eq, test_t};
 
 #[cfg(test)]
 pub mod test {
@@ -235,20 +298,30 @@ pub mod test {
         name: pub Q,
         fields: {
             typ: _,
+            name: _,
             size: ?,
+            -
+            values: [_],
         },
         query: r#"
             (declaration
                 type: (_) @typ
                 declarator: (init_declarator
                     declarator: [
-                        (identifier)
+                        (identifier) @name
                         (array_declarator
+                            declarator: (_) @name
                             size: (_) @size
                         )
                     ]
+                    value: [
+                        (number_literal) @values
+                        (initializer_list
+                            (number_literal)* @values
+                        )
+                    ]
                 )
-            ) @root
+            )
         "#,
     }
 
@@ -258,8 +331,10 @@ pub mod test {
             int number = 5;
         "#;
         let expected = vec![Q::Literal {
+            name: "number",
             typ: "int",
             size: None,
+            values: vec!["5"],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");
@@ -275,8 +350,10 @@ pub mod test {
             int array[5] = {1, 2, 3, 4, 5};
         "#;
         let expected = vec![Q::Literal {
+            name: "array",
             typ: "int",
             size: Some("5"),
+            values: vec!["1", "2", "3", "4", "5"],
         }];
 
         let ctx = Context::from_buffer(code).expect("Failed to parse snippet");

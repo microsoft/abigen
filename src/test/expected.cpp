@@ -3,26 +3,60 @@
 
 // @abigen:start
 
+#include <utility>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out)
+XYMyClass* x_y_myclass_new_b661()
 {
-    if (self_ptr == nullptr) {
-        return Result::ArgumentNull;
-    }
-    if (out == nullptr) {
-        return Result::ArgumentNull;
-    }
-    x::y::MyClass::SubClass& self = *(x::y::MyClass::SubClass*)self_ptr;
-    *out = int{};
+    XYMyClass* out = (XYMyClass*) new x::y::MyClass();
+    return out;
+}
+
+Result x_y_myclass_new_f5b3(int flag, XYMyClass** out)
+{
+    if (out == nullptr) { return Result::ArgumentNull; }
+    *out = nullptr;
     try {
-        *out = (int)self.do_something((bool)flag);
-    }
-    catch (...) {
+        *out = (XYMyClass*) new x::y::MyClass((bool)flag);
+    } catch (...) {
         return Result::Unknown;
     }
+    return Result::Success;
+}
+
+Result x_y_myclass_new_ee37(XYMyClass** other, XYMyClass** out)
+{
+    if (other == nullptr) { return Result::ArgumentNull; }
+    if (*other == nullptr) { return Result::ArgumentNull; }
+    if (out == nullptr) { return Result::ArgumentNull; }
+
+    *out = nullptr;
+    try {
+        *out = (XYMyClass*) new x::y::MyClass(std::move(**(x::y::MyClass**)other));
+        *other = nullptr;
+    } catch (...) {
+        return Result::Unknown;
+    }
+
+    return Result::Success;
+}
+
+Result x_y_myclass_destroy(XYMyClass** self_ptr)
+{
+    if (self_ptr == nullptr) { return Result::ArgumentNull; }
+    if (*self_ptr == nullptr) { return Result::ArgumentNull; }
+    x::y::MyClass* self = *(x::y::MyClass**) self_ptr;
+    
+    try {
+        delete self;
+        *self_ptr = nullptr;
+    } catch (...) {
+        return Result::Unknown;
+    }
+
     return Result::Success;
 }
 
@@ -61,6 +95,25 @@ Result x_y_myclass_set_config(XYMyClass* self_ptr, const XYZConfig* config)
         return Result::Unknown;
     }
     
+    return Result::Success;
+}
+
+Result x_y_myclass_subclass_do_something(XYMyClassSubClass* self_ptr, int flag, int* out)
+{
+    if (self_ptr == nullptr) {
+        return Result::ArgumentNull;
+    }
+    if (out == nullptr) {
+        return Result::ArgumentNull;
+    }
+    x::y::MyClass::SubClass& self = *(x::y::MyClass::SubClass*)self_ptr;
+    *out = int{};
+    try {
+        *out = (int)self.do_something((bool)flag);
+    }
+    catch (...) {
+        return Result::Unknown;
+    }
     return Result::Success;
 }
 
