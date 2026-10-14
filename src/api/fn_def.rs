@@ -398,7 +398,8 @@ impl ApiFnDef {
                 )?;
             }
             (ApiFnRole::Destructor, _) => {
-                return Ok(());
+                writeln!(f, "delete self;")?;
+                writeln!(f, "*self_ptr = nullptr;")?;
             }
             (ApiFnRole::Method { name, .. }, Some(o)) => {
                 write!(

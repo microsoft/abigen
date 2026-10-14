@@ -52,12 +52,11 @@ Result x_y_myclass_destroy(XYMyClass** self_ptr)
     
     try {
         delete self;
+        *self_ptr = nullptr;
     } catch (...) {
         return Result::Unknown;
     }
 
-    *self_ptr = nullptr;
-    
     return Result::Success;
 }
 
