@@ -1,7 +1,14 @@
 use crate::{
-    AbiConfig, ApiFnArg, ApiType, TypeContext, TypeName, TypeRelation, format::{self, fn_wrap}, name_concat, query::{FnDecl, FnDef},
+    AbiConfig, ApiFnArg, ApiType, TypeContext, TypeName, TypeRelation,
+    format::{self, fn_wrap},
+    name_concat,
+    query::{FnDecl, FnDef},
 };
-use std::{cmp::Ordering, fmt, hash::{DefaultHasher, Hash, Hasher}};
+use std::{
+    cmp::Ordering,
+    fmt,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ApiFnRole {
@@ -53,7 +60,7 @@ pub struct ApiFnDef {
     pub class_name: TypeName,
 
     pub role: ApiFnRole,
-    
+
     pub args: Vec<ApiFnArg>,
 
     /// If this function expects a class instance reference, this will contain it.
@@ -99,7 +106,8 @@ impl From<&FnDecl::Match<'_>> for ApiFnDef {
 
 impl Ord for ApiFnDef {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.class_name.cmp(&other.class_name)
+        self.class_name
+            .cmp(&other.class_name)
             .then(self.role.cmp(&other.role))
             .then(self.args.iter().cmp(other.args.iter()))
     }
@@ -115,7 +123,10 @@ impl Default for ApiFnDef {
     fn default() -> Self {
         Self {
             class_name: TypeName::new(),
-            role: ApiFnRole::Method { name: "undefined".into(), ret: ApiType::void() },
+            role: ApiFnRole::Method {
+                name: "undefined".into(),
+                ret: ApiType::void(),
+            },
             args: vec![],
             self_arg: None,
             out_arg: None,
@@ -148,9 +159,12 @@ impl ApiFnDef {
     }
 
     pub(crate) fn needs_trycatch(&self) -> bool {
-        !self.noexcept || self.self_arg.is_some() || self.args.iter().any(|a| {
-            matches!(a.typ.relation, TypeRelation::Ref | TypeRelation::Owned)
-        })
+        !self.noexcept
+            || self.self_arg.is_some()
+            || self
+                .args
+                .iter()
+                .any(|a| matches!(a.typ.relation, TypeRelation::Ref | TypeRelation::Owned))
     }
 
     pub(crate) fn set_implicit_fields(&mut self, class_name: &TypeName) {
@@ -161,7 +175,9 @@ impl ApiFnDef {
                 a.typ.typ = class_name.clone();
             }
         }
-        if let ApiFnRole::Method { ret, .. } = &mut self.role && class_name.ends_with(&ret.typ) {
+        if let ApiFnRole::Method { ret, .. } = &mut self.role
+            && class_name.ends_with(&ret.typ)
+        {
             ret.typ = class_name.clone();
         }
 
@@ -217,13 +233,13 @@ impl ApiFnDef {
             ApiFnRole::Method { name, ret, .. } => {
                 name.hash(&mut h);
                 ret.hash(&mut h);
-            },
+            }
             ApiFnRole::Constructor => {
                 "ctor".hash(&mut h);
-            },
+            }
             ApiFnRole::Destructor => {
                 "dtor".hash(&mut h);
-            },
+            }
         }
         for a in self.args.iter() {
             a.hash(&mut h);
@@ -239,7 +255,10 @@ impl ApiFnDef {
     }
 
     fn args_c(&self) -> impl Iterator<Item = &ApiFnArg> {
-        self.self_arg.iter().chain(self.args.iter()).chain(self.out_arg.iter().filter(|a| a.is_out))
+        self.self_arg
+            .iter()
+            .chain(self.args.iter())
+            .chain(self.out_arg.iter().filter(|a| a.is_out))
     }
 
     fn proto(
@@ -255,8 +274,9 @@ impl ApiFnDef {
             ApiType {
                 typ: self.class_name.clone(),
                 is_const: self.is_const,
-                relation: TypeRelation::Ptr(1)
-            }.decl(f, config, TypeContext::Outbound)?;
+                relation: TypeRelation::Ptr(1),
+            }
+            .decl(f, config, TypeContext::Outbound)?;
         } else if let ApiFnRole::Method { ret, .. } = &self.role {
             ret.decl(f, config, TypeContext::Outbound)?;
         } else {
@@ -274,11 +294,7 @@ impl ApiFnDef {
         write!(f, ")")
     }
 
-    fn body(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        config: &AbiConfig,
-    ) -> fmt::Result {
+    fn body(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         writeln!(f, "{{")?;
 
         // null checks
@@ -304,7 +320,7 @@ impl ApiFnDef {
             self_arg.deref(f, config, false)?;
             writeln!(f, ";")?;
         }
-        
+
         // declare the return value if necessary
         // if let Some(out) = &self.out_arg && !out.is_out {
         //     out.decl(f, config, true)?;
@@ -327,11 +343,7 @@ impl ApiFnDef {
         write!(f, "}}")
     }
 
-    fn body_try_exec(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        config: &AbiConfig,
-    ) -> fmt::Result {
+    fn body_try_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         if let Some(out) = &self.out_arg {
             out.deref(f, config, false)?;
             write!(f, " = ")?;
@@ -354,48 +366,62 @@ impl ApiFnDef {
         )
     }
 
-    fn body_exec(
-        &self,
-        f: &mut fmt::Formatter<'_>,
-        config: &AbiConfig,
-    ) -> fmt::Result {
+    fn body_exec(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
 
         match (&self.role, &self.out_arg) {
             (ApiFnRole::Constructor, Some(o @ ApiFnArg { is_out: true, .. })) => {
-                write!(f, "*out = {cast} new {name}({args});",
+                write!(
+                    f,
+                    "*out = {cast} new {name}({args});",
                     cast = fn_wrap!(o.typ.cast, config, TypeContext::Outbound),
                     name = fn_wrap!(self.class_name.cpp_case),
-                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                    args = fn_wrap!(
+                        format::delimited,
+                        ", ",
+                        self.args.iter().map(|a| fn_wrap!(arg, a))
+                    ),
                 )?;
-            },
+            }
             (ApiFnRole::Constructor, Some(o @ ApiFnArg { is_out: false, .. })) => {
-                write!(f, "{out} = {cast} new {name}({args});",
+                write!(
+                    f,
+                    "{out} = {cast} new {name}({args});",
                     out = fn_wrap!(o.decl, config, true),
                     cast = fn_wrap!(o.typ.cast, config, TypeContext::Outbound),
                     name = fn_wrap!(self.class_name.cpp_case),
-                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                    args = fn_wrap!(
+                        format::delimited,
+                        ", ",
+                        self.args.iter().map(|a| fn_wrap!(arg, a))
+                    ),
                 )?;
-            },
+            }
             (ApiFnRole::Destructor, _) => {
                 return Ok(());
-            },
+            }
             (ApiFnRole::Method { name, .. }, Some(o)) => {
-                write!(f, "{out} = {deref_pre} self.{name}({args}){deref_post};",
+                write!(
+                    f,
+                    "{out} = {deref_pre} self.{name}({args}){deref_post};",
                     out = fn_wrap!(o.deref, config, true),
                     deref_pre = fn_wrap!(o.typ.deref_pre_name, config, TypeContext::Outbound),
-                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                    args = fn_wrap!(
+                        format::delimited,
+                        ", ",
+                        self.args.iter().map(|a| fn_wrap!(arg, a))
+                    ),
                     deref_post = fn_wrap!(o.typ.deref_post_name, config, TypeContext::Outbound),
                 )?;
-            },
+            }
             (ApiFnRole::Method { name, .. }, None) => {
                 write!(f, "self.{}(", name)?;
                 format::delimited(f, ", ", self.args.iter().map(|a| fn_wrap!(arg, a)))?;
                 write!(f, ");")?;
-            },
+            }
             _ => {
                 return Err(fmt::Error);
-            },
+            }
         }
 
         for a in &self.args {
@@ -403,7 +429,7 @@ impl ApiFnDef {
                 writeln!(f, "*{} = nullptr;", a.name)?;
             }
         }
-        
+
         Ok(())
     }
 }

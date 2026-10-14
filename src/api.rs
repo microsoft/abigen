@@ -94,9 +94,9 @@ impl Api {
         fmt::from_fn(|f| {
             let needs_move = self.classes.iter().any(|c| {
                 c.methods.iter().any(|m| {
-                    m.args.iter().any(|a| {
-                        a.is_out == false && a.typ.relation == TypeRelation::Owned
-                    })
+                    m.args
+                        .iter()
+                        .any(|a| a.is_out == false && a.typ.relation == TypeRelation::Owned)
                 })
             });
 

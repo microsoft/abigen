@@ -35,7 +35,10 @@ impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
 
 impl Ord for ApiFnArg {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.typ.cmp(&other.typ).then(self.name.cmp(&other.name)).then(self.is_out.cmp(&other.is_out).reverse())
+        self.typ
+            .cmp(&other.typ)
+            .then(self.name.cmp(&other.name))
+            .then(self.is_out.cmp(&other.is_out).reverse())
     }
 }
 

@@ -1,7 +1,12 @@
 use crate::{
-    AbiConfig, ApiFnDef, ApiFnRole, TypeName, query::{self, f, k},
+    AbiConfig, ApiFnDef, ApiFnRole, TypeName,
+    query::{self, f, k},
 };
-use std::{cmp::Ordering, collections::{HashMap, HashSet}, fmt};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApiClassDef {
@@ -37,7 +42,9 @@ impl From<&query::ClassDef::Match<'_>> for ApiClassDef {
             }
         }
 
-        let mut methods: Vec<_> = value.ctor.iter()
+        let mut methods: Vec<_> = value
+            .ctor
+            .iter()
             .map(ApiFnDef::from)
             .chain(value.methods.iter().map(ApiFnDef::from))
             .collect();
@@ -73,7 +80,7 @@ impl std::hash::Hash for ApiClassDef {
 }
 
 impl ApiClassDef {
-    pub fn new(name: impl Into<TypeName>, methods: impl IntoIterator<Item=ApiFnDef>) -> Self {
+    pub fn new(name: impl Into<TypeName>, methods: impl IntoIterator<Item = ApiFnDef>) -> Self {
         let mut s = Self {
             name: name.into(),
             methods: HashSet::new(),

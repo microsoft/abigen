@@ -239,7 +239,7 @@ macro_rules! gen_test(
                 let uqname = name.iter().last().unwrap();
                 let expected_class = expected::PARSED.get(uqname).unwrap_or_else(|| panic!("No expected '{uqname}'"));
                 let actual_class = actual::PARSED.get(uqname).unwrap_or_else(|| panic!("No actual '{uqname}'"));
-                
+
                 if stringify!($method) == "new" {
                     collection_eq(&actual_class.ctor, &expected_class.ctor);
                 } else {

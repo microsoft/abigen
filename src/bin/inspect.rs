@@ -42,7 +42,10 @@ fn main() {
         let q =
             Query::new(&tree_sitter_cpp::LANGUAGE.into(), qtext).expect("Failed to compile query");
         let capture_names = q.capture_names();
-        let captures: HashMap<_, _> = capture_names.iter().map(|name| (*name, q.capture_index_for_name(*name).unwrap())).collect();
+        let captures: HashMap<_, _> = capture_names
+            .iter()
+            .map(|name| (*name, q.capture_index_for_name(*name).unwrap()))
+            .collect();
 
         let mut qc = QueryCursor::new();
         let node = ctx.root();

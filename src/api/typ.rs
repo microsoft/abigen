@@ -11,12 +11,10 @@ pub(crate) enum TypeContext {
     Inbound,
 }
 
-static VOID_T: LazyLock<ApiType> = LazyLock::new(|| {
-    ApiType {
-        typ: TypeName::void().clone(),
-        is_const: false,
-        relation: TypeRelation::Value,
-    }
+static VOID_T: LazyLock<ApiType> = LazyLock::new(|| ApiType {
+    typ: TypeName::void().clone(),
+    is_const: false,
+    relation: TypeRelation::Value,
 });
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -48,7 +46,9 @@ impl From<&query::FnDef::Match<'_>> for ApiType {
 
 impl Ord for ApiType {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.is_const.cmp(&other.is_const).reverse()
+        self.is_const
+            .cmp(&other.is_const)
+            .reverse()
             .then(self.typ.cmp(&other.typ))
             .then(self.relation.cmp(&other.relation))
     }
@@ -150,7 +150,9 @@ impl ApiType {
                 write!(f, "const ")?;
             }
             self.typename(f, config, context)?;
-            if self.relation == TypeRelation::Ref || self.relation == TypeRelation::Owned && context == TypeContext::Outbound {
+            if self.relation == TypeRelation::Ref
+                || self.relation == TypeRelation::Owned && context == TypeContext::Outbound
+            {
                 TypeRelation::Ptr(1).decl(f, context)?;
             } else {
                 self.relation.decl(f, context)?;
