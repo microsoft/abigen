@@ -99,7 +99,9 @@ impl From<&FnDecl::Match<'_>> for ApiFnDef {
 
 impl Ord for ApiFnDef {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.role.cmp(&other.role)
+        self.class_name.cmp(&other.class_name)
+            .then(self.role.cmp(&other.role))
+            .then(self.args.iter().cmp(other.args.iter()))
     }
 }
 
@@ -360,29 +362,48 @@ impl ApiFnDef {
         let arg = |f: &mut fmt::Formatter<'_>, a: &ApiFnArg| a.deref(f, config, false);
 
         match (&self.role, &self.out_arg) {
-            (ApiFnRole::Constructor, Some(o)) => {
+            (ApiFnRole::Constructor, Some(o @ ApiFnArg { is_out: true, .. })) => {
+                write!(f, "*out = {cast} new {name}({args});",
+                    cast = fn_wrap!(o.typ.cast, config, TypeContext::Outbound),
+                    name = fn_wrap!(self.class_name.cpp_case),
+                    args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
+                )?;
+            },
+            (ApiFnRole::Constructor, Some(o @ ApiFnArg { is_out: false, .. })) => {
                 write!(f, "{out} = {cast} new {name}({args});",
                     out = fn_wrap!(o.decl, config, true),
                     cast = fn_wrap!(o.typ.cast, config, TypeContext::Outbound),
                     name = fn_wrap!(self.class_name.cpp_case),
                     args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
-                )
+                )?;
             },
-            (ApiFnRole::Destructor, _) => Ok(()),
+            (ApiFnRole::Destructor, _) => {
+                return Ok(());
+            },
             (ApiFnRole::Method { name, .. }, Some(o)) => {
                 write!(f, "{out} = {deref_pre} self.{name}({args}){deref_post};",
                     out = fn_wrap!(o.deref, config, true),
                     deref_pre = fn_wrap!(o.typ.deref_pre_name, config, TypeContext::Outbound),
                     args = fn_wrap!(format::delimited, ", ", self.args.iter().map(|a| fn_wrap!(arg, a))),
                     deref_post = fn_wrap!(o.typ.deref_post_name, config, TypeContext::Outbound),
-                )
+                )?;
             },
             (ApiFnRole::Method { name, .. }, None) => {
                 write!(f, "self.{}(", name)?;
                 format::delimited(f, ", ", self.args.iter().map(|a| fn_wrap!(arg, a)))?;
-                write!(f, ");")
+                write!(f, ");")?;
             },
-            _ => Err(fmt::Error),
+            _ => {
+                return Err(fmt::Error);
+            },
         }
+
+        for a in &self.args {
+            if a.typ.relation == TypeRelation::Owned {
+                writeln!(f, "*{} = nullptr;", a.name)?;
+            }
+        }
+        
+        Ok(())
     }
 }

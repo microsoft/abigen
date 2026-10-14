@@ -33,6 +33,18 @@ impl<'a> Into<Cow<'a, ApiFnArg>> for &'a ApiFnArg {
     }
 }
 
+impl Ord for ApiFnArg {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.typ.cmp(&other.typ).then(self.name.cmp(&other.name)).then(self.is_out.cmp(&other.is_out).reverse())
+    }
+}
+
+impl PartialOrd for ApiFnArg {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl ApiFnArg {
     pub(crate) fn nullcheck(&self, f: &mut fmt::Formatter<'_>, config: &AbiConfig) -> fmt::Result {
         let ctx = if self.is_out {

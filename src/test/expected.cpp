@@ -1,8 +1,9 @@
 #include "expected.h"
 #include "input.h"
-#include <utility>
 
 // @abigen:start
+
+#include <utility>
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,7 +15,7 @@ XYMyClass* x_y_myclass_new_b661()
     return out;
 }
 
-Result x_y_myclass_new_4f4a(int flag, XYMyClass** out)
+Result x_y_myclass_new_f5b3(int flag, XYMyClass** out)
 {
     if (out == nullptr) { return Result::ArgumentNull; }
     *out = nullptr;
@@ -26,7 +27,7 @@ Result x_y_myclass_new_4f4a(int flag, XYMyClass** out)
     return Result::Success;
 }
 
-Result x_y_myclass_new_f0ab(XYMyClass** other, XYMyClass** out)
+Result x_y_myclass_new_ee37(XYMyClass** other, XYMyClass** out)
 {
     if (other == nullptr) { return Result::ArgumentNull; }
     if (*other == nullptr) { return Result::ArgumentNull; }
@@ -35,11 +36,11 @@ Result x_y_myclass_new_f0ab(XYMyClass** other, XYMyClass** out)
     *out = nullptr;
     try {
         *out = (XYMyClass*) new x::y::MyClass(std::move(**(x::y::MyClass**)other));
+        *other = nullptr;
     } catch (...) {
         return Result::Unknown;
     }
 
-    *other = nullptr;
     return Result::Success;
 }
 

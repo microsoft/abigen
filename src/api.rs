@@ -92,8 +92,20 @@ impl Api {
 
     pub fn code(&self, config: &AbiConfig) -> impl Display {
         fmt::from_fn(|f| {
+            let needs_move = self.classes.iter().any(|c| {
+                c.methods.iter().any(|m| {
+                    m.args.iter().any(|a| {
+                        a.is_out == false && a.typ.relation == TypeRelation::Owned
+                    })
+                })
+            });
+
             let mut classes: Vec<_> = self.classes.iter().collect();
             classes.sort();
+
+            if needs_move {
+                writeln!(f, "#include <utility>")?;
+            }
 
             writeln!(f, "{PRE}")?;
 
